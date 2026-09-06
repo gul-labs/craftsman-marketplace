@@ -344,6 +344,12 @@ ALTER TABLE invoices FORCE ROW LEVEL SECURITY;
 table owner, so without `FORCE ROW LEVEL SECURITY` the policy silently does nothing for the
 connection that matters most. Always pair the two statements.
 
+Two exceptions survive even `FORCE`: **superusers**, and any role with the **`BYPASSRLS`** attribute,
+skip row security entirely. Audit which roles hold `BYPASSRLS` (`\du`, or `rolbypassrls` in
+`pg_roles`) and confirm the application's runtime role is not among them — an app connecting as a
+`BYPASSRLS` or superuser role has RLS configured and not enforced, which reads as protected in every
+review that only checks the policies.
+
 **Tenant-scoping policy pattern**, using a session-local setting for the current tenant:
 
 ```sql
@@ -370,6 +376,54 @@ COMMIT;
 `SET LOCAL` is transaction-scoped and reset automatically at commit/rollback — it cannot leak to the
 next transaction that lands on the same pooled connection. See `connection-pooling.md` for the full
 pgBouncer transaction-mode gotcha list.
+
+### Auditing a project that deliberately chose *not* to use RLS
+
+Plenty of sound multi-tenant systems run without RLS. Adopting it late is genuinely invasive — every
+table, every policy, every pooled connection — so "turn on RLS" is often the exact rewrite demand
+that makes an audit worthless. **Meet the project where it is.**
+
+The audit question is not *"why isn't RLS enabled?"* but:
+
+> **You chose not to use RLS. What is the named compensating control, and does it execute in CI?**
+
+**Be precise about what a query scan does and does not buy.** For roles subject to RLS, Postgres
+enforces policies per row and per command however the query arrives — through the app, `psql`, or
+ad-hoc SQL — with the owner, superuser, and `BYPASSRLS` exceptions noted above. A static scan over query
+modules is a **coverage guardrail**, not an equivalent: it cannot see dynamic or raw SQL, modules
+outside its walk, a filter that is present but wrong, a tenant id derived from an untrusted source,
+or any runtime path that bypasses the query layer. Report a sound scan as *a guardrail that exists*,
+never as RLS-equivalent protection, and treat it as a strong short-term measure to run before or
+alongside evaluating RLS rather than as a permanent substitute.
+
+A guardrail worth crediting has four properties. Check each:
+
+1. **The decision is recorded** — an ADR or a comment saying RLS was considered and declined, with
+   the reason. This is *context, not a control*: it tells you the trade-off was deliberate and
+   changes how you write the finding, but a document protects no rows. Properties 2–4 are what
+   actually do work.
+2. **The control is named and mechanical** — most often a *structural test*: walk every query
+   module, and for each exported function touching a tenant-scoped table, require a `tenantId` /
+   `workspaceId` filter or a known scope-helper in the same function body. This is a cheap
+   grep-shaped test, not a framework.
+3. **It runs in CI**, not as a one-off script someone remembers to run.
+4. **Deviations are allowlisted with a written justification each** — keyed by
+   `file::exportName`, one line of reasoning per entry, reviewed like code. This is the load-bearing
+   part: it forces every legitimate cross-tenant query (reconciliation sweeps, background jobs,
+   staff-plane diagnostics) to be argued for in writing rather than silently added.
+
+If 2–4 hold and the scan's scope is honest, **report the guardrail as present and say so explicitly**
+rather than downgrading it to a nag — then note the residual paths it cannot cover (raw SQL, runtime
+access outside the query layer) as the remaining risk, not as a defect in the guardrail.
+
+If the scan exists but skips background jobs, that's the finding: a scheduled job or queue worker
+running outside request context is where tenant scoping is most often lost, because the audit (and
+the test) only looked at HTTP handlers.
+
+Missing entirely? Recommend the structural scan first — it lands in an afternoon, needs no schema or
+pooler change, and gives you a reviewable inventory of *candidate* cross-tenant queries within its
+declared scan scope. Recommend it *before* RLS as a matter of sequencing, not as a replacement for
+evaluating RLS.
 
 ---
 

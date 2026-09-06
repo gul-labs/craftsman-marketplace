@@ -161,6 +161,23 @@ Forbidden: `###` headings; `## ID · 🔴 · open` shorthand; severity/status as
       settings and note zero-retention options where offered → `references/data-privacy.md`
 - [ ] Confirm prompts/completions logged for observability are scrubbed of PII, and users are
       disclosed that AI processes their data → `references/data-privacy.md`
+- [ ] For regulated or policy-constrained generation (medical, financial, legal, real-estate,
+      insurance), identify where the authoritative restrictions live and confirm they are enforced
+      either by a **deterministic, fail-closed control** (constrained templates, output validation
+      against the restriction list) **or by an enforced human-review publication gate** — the review
+      gate blocks publication reliably even though human judgment itself is not deterministic.
+      Restrictions injected as prompt text or per-tenant context fields are an input the model can
+      disregard, **not** enforcement; a doc the model never sees is neither
+      → `references/data-privacy.md`
+- [ ] For factual or citation-bearing output published on a user's behalf, check there is an approved
+      evidence source and a claim-attribution, source-validation, or human-review path rather than
+      free-generated assertions. Require tenant-level prohibited-claim rules only where the product's
+      own policy or regulatory scope calls for them → `references/reliability-evals.md`
+- [ ] Check the model is selected and evaluated against the task's **factuality and citation
+      requirements**, not cost alone, and that observed fabricated citations are treated as
+      disqualifying regardless of tier. Model choice alone does not make citation-bearing output safe
+      — keep the evaluation and its mitigation rationale with the call site or its config
+      → `references/reliability-evals.md`
 - [ ] Verify LLM calls have timeouts and a graceful-degradation fallback for provider outages, and
       that retries never re-fire a non-idempotent tool action → `references/reliability-evals.md`
 - [ ] Check for schema validation (repair-or-reject) on structured LLM output before it's consumed

@@ -216,6 +216,7 @@ Run these in order. Each step writes its output into `.craftsman/` so the next s
 | **Persona-aware finding voice, severity, ruthless sequencing, MVP vs enterprise tiers** | `references/prioritization.md`       |
 | **What to recommend when a surface is missing** (tiered, dated, defers to existing)   | `references/recommended-stack.md`     |
 | **Quality gate detection** — linting config, CI gate, pre-commit hooks, TS strictness, `quality` script, local/CI drift | `references/quality.md` |
+| **Auditing stated claims against actual behaviour** — policy/README/success-message vs code, jurisdiction gating, the legal-conclusion boundary | `references/claim-verification.md` |
 | **Deep lint/static-quality audit** — resolved ESLint rules, typed linting, strict rule standard, migration/fix plan | `craft-lint` |
 
 For the actual domain audits, load the peer skill (`craft-ux`, `craft-backend`, etc.) — this skill

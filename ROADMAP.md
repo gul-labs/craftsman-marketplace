@@ -135,6 +135,55 @@ demand a rewrite of a working stack).
   depth). Either signal is grounds to split it into a standalone `compliance-craft` with its own
   checklist, references, and readiness grade.
 
+## Re-evaluated, still folded in (2026-09-06)
+
+- **Compliance graduation trigger tested against a real production codebase — did not fire.**
+  Re-opened the 2026-07-06 decision above after a prompt to cover a viral "launch checklist"
+  (privacy policy, cookie consent, T&Cs, refund policy, copyright on images, fake reviews, local
+  laws). Audited a production multi-tenant SaaS (11 locales, real legal pages, GDPR export/delete,
+  Stripe) plus the 15 bespoke audit skills its team wrote for itself. **Their own skills contain
+  essentially zero regulation checks** — a team that wrote 15 in-house audit skills wrote checks for
+  what bit them, not for statutes. That is the trigger's "recurring demand" signal failing, not
+  passing. Confirmed the surface still distributes cleanly across existing domains, so
+  `compliance-craft` stays unbuilt.
+
+  **What the pass did surface** is a *method* that belongs to no single domain, so it landed in the
+  orchestrator: `craft-audit/references/claim-verification.md` — auditing a project's stated claims
+  against its actual behaviour (policy prose vs SDK init literals, subprocessor table vs initialized
+  third parties, destructive-endpoint success messages vs what the handler really did, promised
+  retention vs enforced retention), plus **jurisdiction gating** so regulation-shaped findings are
+  skipped silently when no evidence in the repo says they apply. It carries an explicit authority
+  boundary — verify contradictions between two citable artifacts, never state a legal conclusion —
+  modeled on taxcraft's `authority.md` posture, because the MVP persona reads our output as
+  authoritative and a false "compliant ✅" is worse than silence.
+
+  Motivating defect (real, verified in the audited repo): a substantive privacy policy asserted twice
+  that analytics was "configured to respect Do Not Track"; the init block set no such option, and in
+  the pinned SDK version the flag was legacy and no longer a declared config property — so the naive
+  fix would not even typecheck. Presence checks pass that project. Only a claim-vs-code check finds it.
+
+  Domain additions from the same pass (kept as checklist lines per the folded-in philosophy):
+  `craft-security` (policy-vs-SDK claims, destructive-endpoint message truthfulness, per-locale
+  route-matcher verification), `craft-db` (auditing a deliberate *no-RLS* posture by its named
+  guardrail instead of demanding RLS — explicitly **not** framed as RLS-equivalent), `craft-ux`
+  (compute contrast rather than infer it from a lightness component; re-verify every resolved pair
+  per theme; composite opacity-derived variants), `craft-testing` (structural tests pinning stated
+  promises, as consistency evidence rather than runtime proof), `craft-ai` (regulated-vertical
+  restrictions need a *deterministic* control — prompt context is an input the model can disregard,
+  not enforcement; claim provenance; model evaluated against factuality requirements).
+
+  **Both commits went through codex signoff and both were initially REJECTED** — the review caught an
+  internal contradiction (the file told the agent to hand remediation back to the document owner, then
+  told it to choose), an unverified attribution of a specific auth library's matcher internals, an
+  overstated RLS equivalence, "enforceable" applied to prompt-injected constraints, and a
+  color-science slip (HSL is not a perceptual space). All corrected before merge; the rejections are
+  why the shipped file leads with a claim taxonomy and a "report the discrepancy, don't choose the
+  remedy" rule.
+
+  **Trigger unchanged for next time.** `claim-verification.md` is orchestrator method, not a domain.
+  If the *domain* checklist lines above start needing their own `references/*.md` depth, that is the
+  signal to revisit — not the existence of this file.
+
 ## Graduated (2026-07-15)
 
 - **`craft-ai` graduated 2026-07-15.** LLM-integration domain (prompt injection surface, key/spend

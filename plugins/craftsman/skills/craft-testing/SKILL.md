@@ -194,6 +194,15 @@ Forbidden: `###` headings; `## ID · 🔴 · open` shorthand; severity/status as
       rerun green. One representative probe per distinct invariant is enough — this is not a mutation
       score. If it cannot be safely run, mark the claim `unverified`, not adequate; flag tests never
       seen red and incidents without a reproducing test → `SKILL.md` (Discriminative evidence)
+- [ ] For prose promises that are **material and mechanically verifiable**, check a structural test
+      pins the declared value to the config or implementation it describes (retention windows,
+      tenant-scope filters on query modules, privacy-policy claims vs SDK init literals). Treat these
+      as **consistency evidence, not runtime proof** — asserting `RETENTION_DAYS === 30` and that a
+      job is registered says nothing about whether deletion runs, so pair it with a behavioral test
+      (aged fixture data, real job invocation) and pair tenant-scope scans with integration tests of
+      reads and writes. Legitimate deviations belong in an allowlist with a one-line written
+      justification each. Do not report a missing structural test as a defect where the promise is
+      immaterial or not mechanically checkable → craft-audit `references/claim-verification.md`
 - [ ] **TEST ↔ INFRA handoff:** this pass owns which suites must gate merge and what "green" means
       (including whether critical-flow e2e exists). Missing e2e *suite* is a TEST finding; if the
       suite exists but is not *wired into CI*, note it and route to craft-infra (pipeline mechanism)

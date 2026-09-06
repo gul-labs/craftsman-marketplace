@@ -148,6 +148,27 @@ All colors through the token system. Never hex, rgb, or palette classes in domai
 | UI components, icons            | 3:1           |
 | Focus indicators                | 3:1           |
 
+**Measure the ratio — never eyeball it, and never infer it from a lightness component.** A lightness
+value in OKLCH, LCH, or HSL is not a WCAG contrast ratio, and judging a pair by comparing the two `L`
+values will pass combinations that fail. Compute the real thing: resolve both foreground and
+background, convert to linear sRGB, and apply the WCAG relative-luminance formula — via a checker or
+a scripted gate.
+
+**Re-verify every resolved pair in every theme.** Contrast is a property of a *pair* of resolved
+colors, not of a token name, so a pair passing in light mode establishes nothing about the
+corresponding pair in dark mode — swapping only the surface token is enough to break it. Validate
+each theme, each high-contrast variant, and each brand skin separately.
+
+**Measure opacity-derived variants after compositing.** A muted variant built as semi-transparent
+text over a surface is a *different resolved color* than the token it derives from. Measure the
+composited result over each actual background, and judge it against the threshold for how it's
+rendered — 4.5:1 for normal text, 3:1 where it genuinely qualifies as large text. If a variant only
+clears the bar as large text, that's a constraint to write down, not a free pass at body size.
+
+**Never let color alone carry meaning.** Status, validity, and severity need a text label or an icon
+alongside the hue — required for color-blind users, and it's also what keeps a status system legible
+when the theme changes.
+
 **Rules:**
 
 - Interactive states (hover, focus, active, disabled) have distinct, consistent color shifts
