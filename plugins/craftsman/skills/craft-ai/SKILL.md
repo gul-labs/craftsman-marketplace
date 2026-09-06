@@ -162,11 +162,13 @@ Forbidden: `###` headings; `## ID · 🔴 · open` shorthand; severity/status as
 - [ ] Confirm prompts/completions logged for observability are scrubbed of PII, and users are
       disclosed that AI processes their data → `references/data-privacy.md`
 - [ ] For regulated or policy-constrained generation (medical, financial, legal, real-estate,
-      insurance), identify where the authoritative restrictions live and check they are enforced by a
-      **deterministic control** appropriate to the output — approved templates, output validation
-      against the restriction list, or a required human review. Restrictions injected as prompt text
-      or per-tenant context fields are an input the model can disregard, **not** enforcement; a doc
-      the model never sees is neither → `references/data-privacy.md`
+      insurance), identify where the authoritative restrictions live and confirm they are enforced
+      either by a **deterministic, fail-closed control** (constrained templates, output validation
+      against the restriction list) **or by an enforced human-review publication gate** — the review
+      gate blocks publication reliably even though human judgment itself is not deterministic.
+      Restrictions injected as prompt text or per-tenant context fields are an input the model can
+      disregard, **not** enforcement; a doc the model never sees is neither
+      → `references/data-privacy.md`
 - [ ] For factual or citation-bearing output published on a user's behalf, check there is an approved
       evidence source and a claim-attribution, source-validation, or human-review path rather than
       free-generated assertions. Require tenant-level prohibited-claim rules only where the product's

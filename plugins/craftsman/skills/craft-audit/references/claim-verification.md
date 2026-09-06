@@ -59,12 +59,19 @@ Sort each claim first, and **only pursue the first two categories**:
 | Category | Example | What you can do |
 | --- | --- | --- |
 | **Source-verifiable** | "We don't set advertising cookies"; "analytics respects DNT"; "deletion cascades to related records" | Compare against code and config; cite both sides |
-| **Runtime-verifiable** | "No tracking before consent"; "export includes all your data" | Observe actual behaviour — cold load, network panel, run the endpoint |
+| **Runtime-verifiable** | "No tracking before consent"; "the export endpoint returns your profile and workspaces" | Observe actual behaviour — cold load, network panel, run the endpoint. Verifies what an execution *does*, never that nothing was missed |
 | **Operational-evidence-required** | "99.9% uptime"; "backups every 6 hours"; "we respond to requests in 30 days" | Out of scope from source alone. Note that the claim exists and needs operational evidence; do not grade it |
 | **Not assessable here** | "SOC 2 certified"; "GDPR compliant"; "reviewed by counsel" | Record as unverifiable from the repo. Never affirm and never deny |
 
 Writing "no evidence found in the repo" for a category-3 or category-4 claim is not a finding — it's
 noise. Say nothing, or note it once as a scope limit.
+
+**Completeness claims are the trap in category 2.** "Your export includes *all* your data" and
+"deletion removes *everything*" are universal statements: running the endpoint shows what that one
+execution did, never that no other table, vendor, backup, or system of record still holds something.
+You can verify a *bounded* version ("the export covers these six tables") against a data inventory;
+the unbounded version needs operational evidence. Verify what you can enumerate, and say plainly
+what you did not check.
 
 ---
 
@@ -138,8 +145,11 @@ Consult the lockfile and the resolved package (its types, its docs, or its sourc
 `node_modules` when there is one — it may be absent under PnP or a partial install). Two traps worth
 knowing:
 
-- **The option is opt-in and absent.** "Absent" is not "safe default." If the policy says the
-  behaviour is *configured*, an absent option contradicts that regardless of the library default.
+- **The option is opt-in and absent from this call.** "Absent" is not "safe default" — but it is also
+  not proof the behaviour is off. Before calling it a contradiction, check the other places the
+  setting could come from: a wrapper or provider component, an earlier init path, a server-side
+  project setting, or a library default that already does the right thing. An absent option is a
+  strong lead; the finding needs the resolved behaviour.
 - **The option is legacy in the resolved version.** It may still work at runtime while no longer
   being a declared property on the published config type — in which case setting it may not
   typecheck cleanly against that type, and the library has usually moved to a newer consent API.
@@ -158,8 +168,12 @@ subprocessor relationship on its own. Use them as **leads**, then trace what is 
 asserting anything. Distinguish "an SDK is present", "a vendor receives data", and "a vendor is a
 subprocessor" — the last is partly a contractual question you cannot settle from source.
 
-Both directions are worth surfacing: a vendor that appears to receive data and isn't listed, and a
-listed vendor with no trace in the code.
+The two directions carry different weight. A vendor that appears to receive data and isn't listed is
+a lead worth chasing. A **listed vendor with no trace in the code is not a discrepancy** — absence of
+a repository trace doesn't establish that the vendor was removed or processes nothing, since it may
+be integrated server-side, via a platform setting, or by another repo. Raise that one as an evidence
+request ("§4 lists this vendor; I found no integration in this repo — where does it run?"), never as
+a defect.
 
 ### 3. Success messages vs what the code actually did
 
@@ -236,11 +250,14 @@ locales, currencies, region config, an EU subprocessor, an age gate, a public-se
 When that evidence is absent, **still report the contradiction — just report it plainly**, without
 the regime name. "Your policy says X, the code does Y" needs no statute attached to be actionable.
 
-And treat these signals as weak. The presence of US users does not establish that CCPA/CPRA applies
-(that regime has revenue and volume thresholds); an EU locale does not settle GDPR's scope. They tell
-you a regime is *plausibly* in play, which is enough to justify mentioning it as context and never
-enough to assert it applies. When jurisdiction genuinely changes what's worth surfacing, ask the user
-once — it's cheap for them to answer and expensive for you to guess.
+**These signals are weak, and they license only one sentence.** The presence of US users does not
+establish that CCPA/CPRA applies (that regime has revenue and volume thresholds); an EU locale does
+not settle GDPR's scope. What they support is exactly *"GDPR may be relevant here; applicability
+unassessed"* — never a GDPR-labelled problem, and never a finding whose severity rests on the regime
+being in play. If the framing is doing any work beyond a pointer for the reader, you've overstepped.
+
+When jurisdiction genuinely changes what's worth surfacing, ask the user once — it's cheap for them
+to answer and expensive for you to guess.
 
 ---
 
@@ -312,6 +329,14 @@ Reject the finding if:
       play — or, worse, drops a real contradiction because that evidence was missing.
 - [ ] It flags a decision that carries a comment or ADR explaining the trade-off, without engaging
       with that reasoning.
-- [ ] It cites the claim but not the implementation, or the implementation but not the claim — a
-      claim finding needs **both** `file:line` anchors or it isn't verified.
+- [ ] It cites only one side. A **source-verifiable** finding needs a `file:line` anchor on the claim
+      *and* on the implementation. A **runtime-verifiable** finding needs the claim's anchor plus
+      reproducible runtime evidence (the steps, the observed request/response) — an implementation
+      line is welcome but not required, and runtime evidence never substitutes for citing the claim.
+- [ ] It treats a listed vendor with no repository trace as a discrepancy rather than an evidence
+      request.
+- [ ] It reads an absent config option as proof the behaviour is off, without checking wrappers,
+      earlier init paths, server-side settings, or the library default.
+- [ ] It attaches a regime name to anything stronger than "may be relevant; applicability
+      unassessed".
 - [ ] It claims a structural test proves runtime behaviour.
