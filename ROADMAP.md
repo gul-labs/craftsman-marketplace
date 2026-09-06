@@ -163,12 +163,22 @@ demand a rewrite of a working stack).
   fix would not even typecheck. Presence checks pass that project. Only a claim-vs-code check finds it.
 
   Domain additions from the same pass (kept as checklist lines per the folded-in philosophy):
-  `craft-security` (policy-vs-SDK claims, destructive-endpoint message truthfulness, localized
-  route-matcher auth bypass), `craft-db` (auditing a deliberate *no-RLS* posture by its named
-  compensating control instead of demanding RLS), `craft-ux` (measure contrast rather than infer it
-  from a lightness channel; re-verify every pair per theme), `craft-testing` (structural tests
-  pinning stated promises), `craft-ai` (are regulated-vertical restrictions enforceable at generation
-  time or just notes; claim provenance; model tier justified by hallucination tolerance).
+  `craft-security` (policy-vs-SDK claims, destructive-endpoint message truthfulness, per-locale
+  route-matcher verification), `craft-db` (auditing a deliberate *no-RLS* posture by its named
+  guardrail instead of demanding RLS — explicitly **not** framed as RLS-equivalent), `craft-ux`
+  (compute contrast rather than infer it from a lightness component; re-verify every resolved pair
+  per theme; composite opacity-derived variants), `craft-testing` (structural tests pinning stated
+  promises, as consistency evidence rather than runtime proof), `craft-ai` (regulated-vertical
+  restrictions need a *deterministic* control — prompt context is an input the model can disregard,
+  not enforcement; claim provenance; model evaluated against factuality requirements).
+
+  **Both commits went through codex signoff and both were initially REJECTED** — the review caught an
+  internal contradiction (the file told the agent to hand remediation back to the document owner, then
+  told it to choose), an unverified attribution of a specific auth library's matcher internals, an
+  overstated RLS equivalence, "enforceable" applied to prompt-injected constraints, and a
+  color-science slip (HSL is not a perceptual space). All corrected before merge; the rejections are
+  why the shipped file leads with a claim taxonomy and a "report the discrepancy, don't choose the
+  remedy" rule.
 
   **Trigger unchanged for next time.** `claim-verification.md` is orchestrator method, not a domain.
   If the *domain* checklist lines above start needing their own `references/*.md` depth, that is the

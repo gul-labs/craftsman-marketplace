@@ -381,10 +381,20 @@ The audit question is not *"why isn't RLS enabled?"* but:
 
 > **You chose not to use RLS. What is the named compensating control, and does it execute in CI?**
 
-A real compensating control has four properties. Check each:
+**Be precise about what a query scan does and does not buy.** RLS is enforced by the database, per
+row and per command, on every access path including psql and ad-hoc SQL. A static scan over query
+modules is a **coverage guardrail**, not an equivalent: it cannot see dynamic or raw SQL, modules
+outside its walk, a filter that is present but wrong, a tenant id derived from an untrusted source,
+or any runtime path that bypasses the query layer. Report a sound scan as *a guardrail that exists*,
+never as RLS-equivalent protection, and treat it as a strong short-term measure to run before or
+alongside evaluating RLS rather than as a permanent substitute.
+
+A guardrail worth crediting has four properties. Check each:
 
 1. **The decision is recorded** — an ADR or a comment saying RLS was considered and declined, with
-   the reason. An undocumented absence is a gap; a documented one is a trade-off.
+   the reason. This is *context, not a control*: it tells you the trade-off was deliberate and
+   changes how you write the finding, but a document protects no rows. Properties 2–4 are what
+   actually do work.
 2. **The control is named and mechanical** — most often a *structural test*: walk every query
    module, and for each exported function touching a tenant-scoped table, require a `tenantId` /
    `workspaceId` filter or a known scope-helper in the same function body. This is a cheap
@@ -395,13 +405,17 @@ A real compensating control has four properties. Check each:
    part: it forces every legitimate cross-tenant query (reconciliation sweeps, background jobs,
    staff-plane diagnostics) to be argued for in writing rather than silently added.
 
-If all four hold, **the finding is "none" — say so explicitly** and move on; do not downgrade it to
-a nag. If the control exists but skips background jobs, that's the finding: a scheduled job or queue
-worker running outside request context is where tenant scoping is most often lost, because the audit
-(and the test) only looked at HTTP handlers.
+If 2–4 hold and the scan's scope is honest, **report the guardrail as present and say so explicitly**
+rather than downgrading it to a nag — then note the residual paths it cannot cover (raw SQL, runtime
+access outside the query layer) as the remaining risk, not as a defect in the guardrail.
 
-Missing entirely? Recommend the structural test *before* recommending RLS — it lands in an afternoon,
-covers the same failure mode, and doesn't touch the schema or the pooler.
+If the scan exists but skips background jobs, that's the finding: a scheduled job or queue worker
+running outside request context is where tenant scoping is most often lost, because the audit (and
+the test) only looked at HTTP handlers.
+
+Missing entirely? Recommend the structural scan first — it lands in an afternoon, needs no schema or
+pooler change, and gives you an inventory of every cross-tenant query in the codebase. Recommend it
+*before* RLS as a matter of sequencing, not as a replacement for evaluating RLS.
 
 ---
 

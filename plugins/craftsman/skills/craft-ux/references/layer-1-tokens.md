@@ -148,22 +148,22 @@ All colors through the token system. Never hex, rgb, or palette classes in domai
 | UI components, icons            | 3:1           |
 | Focus indicators                | 3:1           |
 
-**Measure the ratio — never eyeball it, and never infer it from a lightness channel.** A token
-authored in a perceptual space (OKLCH, HSL, LCH) tempts you to judge contrast from its lightness
-value. That estimate is wrong often enough to ship failures. Compute the real thing: convert to
-linear sRGB and apply the WCAG relative-luminance formula, via a checker or a scripted gate. A
-token can look comfortably separated and measure 2.16:1.
+**Measure the ratio — never eyeball it, and never infer it from a lightness component.** A lightness
+value in OKLCH, LCH, or HSL is not a WCAG contrast ratio, and judging a pair by comparing the two `L`
+values will pass combinations that fail. Compute the real thing: resolve both foreground and
+background, convert to linear sRGB, and apply the WCAG relative-luminance formula — via a checker or
+a scripted gate.
 
-**Re-verify every pair in every theme.** Contrast is a property of a *pair* of resolved colors, not
-of a token name — so a pair that passes in light mode tells you nothing about the same pair in dark
-mode. Real example of the trap: a text/surface pair measuring a passing 5.05:1 in light mode and a
-failing 3.61:1 in dark, because only the surface token was swapped. Every theme, every high-contrast
-variant, every brand skin gets its own pass.
+**Re-verify every resolved pair in every theme.** Contrast is a property of a *pair* of resolved
+colors, not of a token name, so a pair passing in light mode establishes nothing about the
+corresponding pair in dark mode — swapping only the surface token is enough to break it. Validate
+each theme, each high-contrast variant, and each brand skin separately.
 
-**Opacity-derived text variants are the usual culprit.** A muted variant built as ~70% opacity over
-a surface is a *different resolved color* than the token it derives from, and routinely lands in the
-2:1 range. Measure the composited result, not the base token — and if a variant fails, ban it at all
-sizes rather than reserving it for "large text only."
+**Measure opacity-derived variants after compositing.** A muted variant built as semi-transparent
+text over a surface is a *different resolved color* than the token it derives from. Measure the
+composited result over each actual background, and judge it against the threshold for how it's
+rendered — 4.5:1 for normal text, 3:1 where it genuinely qualifies as large text. If a variant only
+clears the bar as large text, that's a constraint to write down, not a free pass at body size.
 
 **Never let color alone carry meaning.** Status, validity, and severity need a text label or an icon
 alongside the hue — required for color-blind users, and it's also what keeps a status system legible

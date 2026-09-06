@@ -178,7 +178,9 @@ Forbidden: `###` headings; `## ID · 🔴 · open` shorthand; severity/status as
       true of what the code actually did — flag "permanently deleted" on a handler that soft-deletes,
       defers to an async webhook, or leaves org-owned rows intact →
       craft-audit `references/claim-verification.md`
-- [ ] On localized apps, verify protected-route matchers actually match under **every** locale — some
-      matchers (e.g. Clerk's `createRouteMatcher` via `@hapi/call`) treat `(en|de|ar)` alternation as
-      literal text, silently leaving every non-default-locale route public → `references/authz.md`
+- [ ] On localized apps, verify protected-route matchers actually match under **every** supported
+      locale, using the installed matcher's documented pattern syntax — never assume regex alternation
+      like `(en|de|ar)` is valid in a string pattern, since several matchers treat non-parameter path
+      text literally. Test one protected path per locale, positive and negative; flag only a
+      demonstrated mismatch that leaves a route unprotected → `references/authz.md`
 
