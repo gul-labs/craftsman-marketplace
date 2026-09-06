@@ -161,6 +161,18 @@ Forbidden: `###` headings; `## ID · 🔴 · open` shorthand; severity/status as
       settings and note zero-retention options where offered → `references/data-privacy.md`
 - [ ] Confirm prompts/completions logged for observability are scrubbed of PII, and users are
       disclosed that AI processes their data → `references/data-privacy.md`
+- [ ] If the product generates content for users in regulated verticals (medical, financial, legal,
+      real-estate, insurance), check **where the "must avoid" phrases and required disclaimers live —
+      and whether they are enforceable at generation time or just notes in a doc**. Restrictions
+      captured as structured per-tenant fields that flow into the prompt are enforceable; a wiki page
+      the model never sees is not → `references/data-privacy.md`
+- [ ] Where the product makes factual claims on a user's behalf, check the generation path carries a
+      provenance/proof requirement (claim → evidence → source) rather than free-generating assertions,
+      and that a prohibited-claims list exists for the tenant → `references/reliability-evals.md`
+- [ ] Check the model tier is justified for the task's **hallucination tolerance**, not just cost —
+      a cheap/lite tier fabricating citations is disqualifying for compliance-, legal-, or
+      citation-bearing output even when it benchmarks fine elsewhere. The reasoning belongs in a
+      comment at the call site → `references/reliability-evals.md`
 - [ ] Verify LLM calls have timeouts and a graceful-degradation fallback for provider outages, and
       that retries never re-fire a non-idempotent tool action → `references/reliability-evals.md`
 - [ ] Check for schema validation (repair-or-reject) on structured LLM output before it's consumed

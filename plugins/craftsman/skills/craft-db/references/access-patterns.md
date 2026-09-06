@@ -371,6 +371,38 @@ COMMIT;
 next transaction that lands on the same pooled connection. See `connection-pooling.md` for the full
 pgBouncer transaction-mode gotcha list.
 
+### Auditing a project that deliberately chose *not* to use RLS
+
+Plenty of sound multi-tenant systems run without RLS. Adopting it late is genuinely invasive — every
+table, every policy, every pooled connection — so "turn on RLS" is often the exact rewrite demand
+that makes an audit worthless. **Meet the project where it is.**
+
+The audit question is not *"why isn't RLS enabled?"* but:
+
+> **You chose not to use RLS. What is the named compensating control, and does it execute in CI?**
+
+A real compensating control has four properties. Check each:
+
+1. **The decision is recorded** — an ADR or a comment saying RLS was considered and declined, with
+   the reason. An undocumented absence is a gap; a documented one is a trade-off.
+2. **The control is named and mechanical** — most often a *structural test*: walk every query
+   module, and for each exported function touching a tenant-scoped table, require a `tenantId` /
+   `workspaceId` filter or a known scope-helper in the same function body. This is a cheap
+   grep-shaped test, not a framework.
+3. **It runs in CI**, not as a one-off script someone remembers to run.
+4. **Deviations are allowlisted with a written justification each** — keyed by
+   `file::exportName`, one line of reasoning per entry, reviewed like code. This is the load-bearing
+   part: it forces every legitimate cross-tenant query (reconciliation sweeps, background jobs,
+   staff-plane diagnostics) to be argued for in writing rather than silently added.
+
+If all four hold, **the finding is "none" — say so explicitly** and move on; do not downgrade it to
+a nag. If the control exists but skips background jobs, that's the finding: a scheduled job or queue
+worker running outside request context is where tenant scoping is most often lost, because the audit
+(and the test) only looked at HTTP handlers.
+
+Missing entirely? Recommend the structural test *before* recommending RLS — it lands in an afternoon,
+covers the same failure mode, and doesn't touch the schema or the pooler.
+
 ---
 
 ## Quick-reject checklist

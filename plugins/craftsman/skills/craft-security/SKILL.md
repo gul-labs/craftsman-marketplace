@@ -170,4 +170,15 @@ Forbidden: `###` headings; `## ID · 🔴 · open` shorthand; severity/status as
 - [ ] Confirm a PII surface inventory exists (which tables/columns hold PII) and that PII isn't
       leaking into application logs, analytics events, or error trackers (Sentry) →
       `references/data-rights.md`
+- [ ] Compare the privacy policy's factual claims against the actual SDK init literals (DNT/consent
+      options, session-recording flags, cookie vs localStorage persistence) and its subprocessor list
+      against the third parties actually initialized. Verify library defaults in the *pinned* version
+      before calling an absent option a defect → craft-audit `references/claim-verification.md`
+- [ ] Check that the success message returned by destructive endpoints (account/data deletion) is
+      true of what the code actually did — flag "permanently deleted" on a handler that soft-deletes,
+      defers to an async webhook, or leaves org-owned rows intact →
+      craft-audit `references/claim-verification.md`
+- [ ] On localized apps, verify protected-route matchers actually match under **every** locale — some
+      matchers (e.g. Clerk's `createRouteMatcher` via `@hapi/call`) treat `(en|de|ar)` alternation as
+      literal text, silently leaving every non-default-locale route public → `references/authz.md`
 
