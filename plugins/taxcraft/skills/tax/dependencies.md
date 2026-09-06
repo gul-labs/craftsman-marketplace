@@ -19,6 +19,11 @@ Run this before the first request that touches a PDF or a validator:
 python3 -B "${CLAUDE_PLUGIN_ROOT}/skills/tax/tools/dep-check/dep_check.py"
 ```
 
+`--install-commands` prints every outstanding fix as one approvable block, and
+`--self-test` parses the shipped PDF fixture corpus with this machine's poppler
+and compares it to golden values — presence is not capability, and a build that
+misreads a fixture will misread a real W-2 the same way.
+
 It checks the skill's own install, the Python runtime, poppler, the validator
 packages, and the optional fallback rungs, then prints the exact fix command for
 this platform for anything missing. Exit 0 means every required dependency is
@@ -89,8 +94,9 @@ invention wearing the filename of a control.
 ## Layer 1 — poppler (required for every PDF)
 
 Needed by: the whole `parsing.md` ladder, `intake.md`, `governance.md` document
-intake, and the `pdf-extractor`, `k1-parser`, `return-parser`,
+intake, and the `pdf-extractor`, `form-parser`, `k1-parser`, `return-parser`,
 `transcript-parser`, `chase-statement-parser`, and `ibkr-parser` tools.
+`pdffonts` (same package) feeds the text-quality gate in `tools/pdf-extractor/quality.py`.
 
 ```bash
 command -v pdftotext pdftoppm pdfinfo    # all three must resolve
@@ -143,6 +149,8 @@ fallback ladder whose earlier rungs handle the large majority of documents.
 
 | Dependency | Gates | Probe | Fix |
 |---|---|---|---|
+| `pypdf` | `parsing.md` rung 0 — read AcroForm field values exactly (IRS fillable forms, some issuer PDFs) | `python3 -c 'import pypdf'` | `pip install --user pypdf` |
+| `pdftk` | `parsing.md` rung 0 — same, when `pypdf` is absent | `command -v pdftk` | macOS `brew install pdftk-java`; Debian `sudo apt install pdftk` |
 | `ocrmypdf` | `parsing.md` rung 3 — OCR a scanned PDF in place | `command -v ocrmypdf` | `pip install --user ocrmypdf` |
 | `pdfplumber` | `parsing.md` rung 4 — stubborn table grids | `python3 -c 'import pdfplumber'` | `pip install --user pdfplumber` |
 | `beancount` (`bean-check`) | `workspace-doctor` ledger validation, for workspaces keeping Beancount books | `command -v bean-check` | `pip install --user beancount` |

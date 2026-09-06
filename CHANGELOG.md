@@ -25,6 +25,96 @@ not a synonym for "public."
 
 Nothing yet.
 
+## [0.8.0] (2026-09-06)
+
+Marketplace `0.8.0`; `taxcraft` moves to `0.3.0`; `craftsman` is unchanged at
+`0.5.0`. This release answers the most consistent piece of user feedback on the
+tax skill: PDF extraction of W-2s, K-1s, 1099s and 1098s was unreliable. MINOR
+because a new shipped tool (`tools/form-parser/`) and new files under
+`tools/pdf-extractor/` land; nothing is removed and legacy parsed JSON stays
+readable.
+
+### Why it was unreliable
+
+- W-2s, 1099s and 1098s had **no parser at all**. They went through the generic
+  extractor and were read freehand from `pdftotext -layout` output.
+- The K-1 and return parsers are regexes tuned on one preparer's layout; a K-1
+  from a different package silently returned zeros.
+- Text was tried before vision even though `parsing.md` itself warned that
+  layout text scrambles form columns.
+- The "is this real text" gate was *more than 50 characters*. A PDF whose fonts
+  carry no ToUnicode map produces long, dense symbol soup that passed it, so the
+  image fallback never fired and the regexes returned nothing — quietly.
+- There was no PDF fixture corpus, so none of this could regress.
+
+### Added — `tools/form-parser/`
+
+- **A declarative registry** (`doc_types.py`) of nineteen information returns —
+  W-2, W-2G, 1099-INT, -DIV, -B (summary), -Composite, -NEC, -MISC, -R, -G, -K,
+  -SA, SSA-1099, 1098, 1098-T, 1098-E, 5498, 5498-SA, 1095-A — each with its
+  boxes (id, label, kind, label regex), anchor phrases for detection, and the
+  arithmetic and tax-law **invariants** an internally consistent copy must
+  satisfy: W-2 box 4 = 6.2% of boxes 3 + 7 and under the year's wage base (read
+  from `rules/federal-<year>.json`), box 6 inside the Medicare band, 1099-DIV
+  1b ≤ 1a, 1099-R 2a ≤ 1 and box 7 present, SSA-1099 box 5 = 3 − 4, 1099-K
+  months sum to 1a, 1095-A annual totals tie and APTC ≤ premium each month, and
+  seventy-one more. Adding a form is adding a registry entry.
+- **`form_parser.py`** runs the new ladder end to end: AcroForm field values
+  when the PDF has them (exact, nothing "read"), a vision skeleton the model
+  fills from the rasterized pages (`--vision-prompt`), a text pass behind the
+  quality gate, a per-field **merge** of the two reads (`--merge`) that lists
+  every disagreement under `_extraction.review_required`, and the invariants.
+  It emits the field envelope `parsing.md` promised in 0.2.0 (`schema_version:
+  2`: value, state, source anchor, confidence, review) and refuses `--write` on
+  a CRITICAL finding. A box the extractor did not observe is `NOT_PRESENT`,
+  never 0.
+- **A fixture corpus** (`fixtures/`): a deterministic pure-Python PDF writer
+  produces a text PDF and golden JSON for every registry type, plus a fillable
+  (AcroForm) W-2, a scanned W-2, a garbage-text W-2 and a deliberately wrong
+  W-2, and `test_form_parser.py` proves the text pass reads every golden value,
+  the gate rejects the garbage, the scan yields a vision prompt, and the wrong
+  W-2 trips its invariant. `tools/form-parser/templates/` holds
+  producer-keyed label overrides for vendor layouts.
+
+### Changed — `tools/pdf-extractor/`
+
+- **Text-quality gate** (`quality.py`): printable ratio, `(cid:N)` share,
+  dictionary hit ratio, and `pdffonts` ToUnicode inspection yield `ok`,
+  `suspect` (vision pass mandatory) or `garbage` (text discarded). Also detects
+  the doc type from anchor phrases.
+- **`envelope.py`**: the field envelope and the merge policy — both engines
+  agree → 0.95 confidence, one-sided → 0.6, disagree → 0.3 with the alternate
+  recorded and the path flagged for review.
+- **`acroform.py`** (rung 0) via `pypdf` or `pdftk`, both optional.
+- `pdf_extract.py` records producer/creator, page count, AcroForm fields and the
+  quality report; `--mode form` returns PNGs *and* gated text; `--json`.
+- `compare.py --fields a.json b.json` diffs two parsed documents box by box.
+
+### Changed — `tools/k1-parser/`, `tools/parse-verify/`
+
+- The K-1 parser no longer raises on an image-only or garbage-text PDF; it
+  returns the PNG paths and a vision prompt, accepts `--merge`, and records the
+  preparer package from the PDF producer with a per-vendor warning naming the
+  boxes to confirm individually (1, 2, 4a/4c, 19, Item K, Item L).
+- `verify.py` unwraps envelopes everywhere, routes every registry type through
+  the declarative invariants, reports an invariant whose inputs were not
+  observed as `not_evaluable` (INFO) instead of passing it on a phantom zero,
+  and surfaces `review_required` paths as MEDIUM findings.
+
+### Changed — method and preflight
+
+- `parsing.md` "PDF read discipline" is rewritten around the new ladder: forms
+  are read by vision first and cross-checked by gated text; AcroForm is rung 0;
+  merge and invariants are rungs 3–4; hosted document-AI services are an
+  explicit rung 7 behind the machine-local file, with the "the document leaves
+  the machine" disclosure. `intake.md` routes every registry type to
+  `form-parser`.
+- `dep-check` probes `pdffonts`, `pypdf` and `pdftk`, and gains `--self-test`,
+  which runs the fixture corpus on the user's machine so "does the pipeline work
+  here, with this poppler build" is answered before a real document is touched.
+- CI installs poppler and runs the fixture tests, so a parser change that breaks
+  a form fails the PR instead of reaching users.
+
 ## [0.7.0] (2026-09-04)
 
 Marketplace `0.7.0`; `taxcraft` moves to `0.2.0`; `craftsman` is unchanged at

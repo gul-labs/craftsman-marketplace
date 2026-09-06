@@ -1,0 +1,22 @@
+{
+  "doc_type": "1098",
+  "tax_year": 2025,
+  "identity": {
+    "payer_name": "Puget Mutual Mortgage Company",
+    "payer_tin": "94-7654321",
+    "recipient_name": "Jordan A Rivera",
+    "recipient_tin": "123-45-6789",
+    "account_number": "PMM-88213-0"
+  },
+  "boxes": {
+    "box_1": 18450.0,
+    "box_2": 425000.0,
+    "box_3": "2019-06-15",
+    "box_4": 0.0,
+    "box_5": 0.0,
+    "box_6": 0.0,
+    "box_7": true,
+    "box_8": "1420 Alder Street, Tacoma WA",
+    "box_10": 6240.0
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "doc_type": "SSA-1099",
+  "tax_year": 2025,
+  "identity": {
+    "recipient_name": "Jordan A Rivera",
+    "recipient_ssn": "123-45-6789",
+    "claim_number": "123-45-6789 A"
+  },
+  "boxes": {
+    "box_3": 24600.0,
+    "box_4": 1200.0,
+    "box_5": 23400.0,
+    "box_6": 2460.0,
+    "medicare_part_b": 2096.4,
+    "medicare_part_d": 0.0
+  }
+}

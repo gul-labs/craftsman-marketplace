@@ -1,0 +1,18 @@
+{
+  "_comment": [
+    "EXAMPLE ONLY — the .example extension keeps form_parser from loading it.",
+    "It shows the shape of a real override; the producer string and the label",
+    "regexes below are invented, not observed. Never ship a vendor template you",
+    "have not tested against that vendor's actual PDF."
+  ],
+  "match": {
+    "producer": "Acme Payroll Systems",
+    "creator": "AcmePay W2 Print Engine"
+  },
+  "doc_type": "W-2",
+  "value_side": "right",
+  "box_patterns": {
+    "box_1": ["Gross Taxable Wages", "Wages,\\s*tips,\\s*other comp"],
+    "box_12": ["Deferral Codes"]
+  }
+}

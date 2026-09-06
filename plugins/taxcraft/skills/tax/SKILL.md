@@ -76,7 +76,24 @@ If something is missing, do **not** pre-authorize the install or run it silently
 Say in one line what it is for and what goes unchecked without it, then propose
 the printed command so the user's normal approval prompt appears — e.g. *"The
 rules-freshness gate needs `jsonschema`; without it I cannot verify your tax
-rules are current."*
+rules are current."* `--install-commands` prints every fix as one block when
+several things are missing, so the user approves one step instead of five.
+Optional rungs are worth naming once at that moment — `pypdf` makes fillable
+forms exact rather than read, and a user installing anything anyway will usually
+take it — but a decline is fine and never blocks work.
+
+**Before the first real document of a workspace**, and after any poppler upgrade,
+run the corpus check:
+
+```bash
+python3 -B "${CLAUDE_PLUGIN_ROOT}/skills/tax/tools/dep-check/dep_check.py" --self-test
+```
+
+It parses the shipped fixture PDFs with the user's own poppler build and compares
+them to checked-in golden values. Presence of a binary is not proof it extracts a
+W-2 correctly on this machine, and that failure is otherwise invisible until it
+has already misread a real form. A failure here stops document work until it is
+resolved.
 
 **If the user declines, stop the task that needed it.** A gate that could not run
 is not a gate that passed — `evals/validate_rules.py` exits 2 on expired tax
@@ -177,7 +194,8 @@ Or describe what you need.
 | `states/wy/README.md` | WY: no income tax, annual report only |
 | `calendar.md` | Compliance calendar — read-only deadline projection over `entity.md` + tax-summary + rules; dashboards, overdue/upcoming |
 | `tools/dep-check/` | One-shot dependency preflight: `python3 -B "$TAX_SKILL/tools/dep-check/dep_check.py"` — checks install integrity, poppler, validator packages, optional rungs; prints the platform-correct fix command; exits 1 when a required dependency is missing. Never installs anything |
-| `tools/README.md` | 10 shipped tools (pdf-extractor, chase-statement-parser, ibkr-parser, k1-parser, return-parser, transcript-parser, coa-categorizer, parse-verify, workspace-doctor, dep-check) — see `tools/README.md` |
+| `tools/form-parser/` | Registry-driven parser for W-2, W-2G, 1099-INT/DIV/B/NEC/MISC/R/G/K/SA, 1099-Composite, SSA-1099, 1098/-T/-E, 5498/-SA, 1095-A: AcroForm → vision skeleton (`--vision-prompt`) → gated text → `--merge` → invariants; emits the schema-2 field envelope. Box definitions and invariants live in `tools/form-parser/doc_types.py` |
+| `tools/README.md` | 11 shipped tools (pdf-extractor, form-parser, chase-statement-parser, ibkr-parser, k1-parser, return-parser, transcript-parser, coa-categorizer, parse-verify, workspace-doctor, dep-check) — see `tools/README.md` |
 | `tools/workspace-doctor/` | Report-only lint: runs `python3 -B "$TAX_SKILL/tools/workspace-doctor/doctor.py"` from the workspace root; reports missing canonical files (e.g. `workspace-profile/slugs.md`), naming violations, empty parse caches, sync-conflict duplicates, unprocessed corporate docs — never modifies anything |
 
 Read sub-skill files via Read tool as needed. Never load all upfront.
@@ -303,7 +321,7 @@ figure is a hold, not a zero.
 ## Naming & parsing
 
 - Any file the skill writes or expects — folder slug or document filename — follows `naming.md`. Violations found during intake or migration are corrected, not accepted.
-- Any PDF read — use `pdftotext -layout`; never the built-in Read. Full rules + cache index + JSON schemas in `parsing.md`.
+- Any PDF read — forms are read by vision over the rasterized page and cross-checked by gated `pdftotext -layout` text, then merged (`tools/form-parser/`, `tools/k1-parser/`); never the built-in Read on a PDF. Full ladder + cache index + JSON schemas in `parsing.md`.
 
 ## Document intake pipelines (STRICT)
 

@@ -17,8 +17,12 @@ basis worksheet explained by debt share) are the ones worth guarding.
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
-from verify import check_1065, check_cross, check_k1
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pdf-extractor"))
+
+import envelope  # noqa: E402
+from verify import check_1065, check_cross, check_k1, verify_docs  # noqa: E402
 
 FAILURES: list[str] = []
 
@@ -241,6 +245,117 @@ ret_ok = {**ret, "schedule_k": dict(ret["schedule_k"], line_18c_nondeductible_ex
 expect("cross.nondeductible_passthrough" not in ids(
            check_cross({"r": ret_ok, "a": p1, "b": p2, "x": r1, "y": r2})),
        "nondeductible expenses correctly passed through are not flagged")
+
+# --------------------------------------------------------------------------
+print("\nSchema-2 envelopes verify identically to legacy flat documents")
+
+
+def envelope_ize(doc):
+    """Wrap every scalar (nested dicts included) in an OBSERVED envelope.
+
+    This is the shape `k1_parser.py --merge` and `form_parser.py` emit. A
+    verifier that reads `.value` only on the paths it happens to remember
+    passes the flat corpus and silently reports nothing on the new one.
+    """
+    if isinstance(doc, dict):
+        return {k: envelope_ize(v) for k, v in doc.items()}
+    if isinstance(doc, (int, float)) and not isinstance(doc, bool):
+        return envelope.make(float(doc))
+    if isinstance(doc, str):
+        return envelope.make(doc)
+    return doc
+
+
+for label, flat in (("signed", signed_convention), ("broken", broken),
+                    ("zero basis", zero_basis), ("swapped GP", swapped),
+                    ("blank Item L", blank)):
+    wrapped = dict(envelope_ize(flat), doc_type=flat["doc_type"], schema_version=2)
+    expect(ids(check_k1(wrapped, "env")) == ids(check_k1(flat, "flat")),
+           f"envelope K-1 ({label}) yields exactly the flat K-1's findings")
+
+# --------------------------------------------------------------------------
+print("\nMissing is not zero — an unobserved input skips its check")
+
+not_present_capital = dict(envelope_ize(signed_convention), doc_type="K-1-1065", schema_version=2)
+not_present_capital["part_ii_item_l"] = dict(not_present_capital["part_ii_item_l"],
+                                             ending=envelope.make(None))
+np_ids = ids(check_k1(not_present_capital, "np"))
+expect("K1.item_l.rollforward.not_evaluable" in np_ids,
+       "a NOT_PRESENT capital-account field skips the rollforward with an INFO finding")
+expect("K1.item_l.rollforward" not in np_ids,
+       "the skipped rollforward is not reported as a break against a substituted zero")
+expect(all(f.severity == "INFO" for f in check_k1(not_present_capital, "np")
+           if f.check.endswith(".not_evaluable")),
+       "not_evaluable findings are INFO, never a failure")
+
+# An UNREADABLE liability share must not be read as a zero basis either.
+unreadable_debt = dict(envelope_ize(zero_basis), doc_type="K-1-1065", schema_version=2)
+unreadable_debt["part_ii_item_k"] = {"nonrecourse": envelope.make(None, "UNREADABLE"),
+                                     "qnr": envelope.make(0.0), "recourse": envelope.make(0.0)}
+ud_ids = ids(check_k1(unreadable_debt, "unreadable"))
+expect("K1.704d.loss_exceeds_basis" not in ud_ids,
+       "an unreadable liability share does not assert a §704(d) violation")
+expect("K1.704d.loss_exceeds_basis.not_evaluable" in ud_ids,
+       "an unreadable liability share is reported as not evaluable")
+
+# --------------------------------------------------------------------------
+print("\nRegistry doc types are routed to the declarative invariants")
+
+
+def w2_doc(box_4: float) -> dict:
+    """A schema-2 W-2. tax_year 2025 so `rules/federal-2025.json` loads and the
+    rate invariants can evaluate at all."""
+    env = envelope.make
+    return {
+        "doc_type": "W-2", "schema_version": 2, "tax_year": 2025,
+        "identity": {"employee_ssn": env("123-45-6789"), "employer_ein": env("91-1234567"),
+                     "employer_name": env("ACME HOLDINGS LLC"), "employee_name": env("PAT DOE")},
+        "boxes": {"box_1": env(100000.0), "box_2": env(14000.0), "box_3": env(100000.0),
+                  "box_4": env(box_4), "box_5": env(100000.0), "box_6": env(1450.0),
+                  "box_12": env([]), "box_16": env(100000.0), "box_17": env(5000.0),
+                  "box_18": env(100000.0), "box_19": env(1500.0)},
+    }
+
+
+consistent = verify_docs({"w2.json": w2_doc(6200.0)})
+expect(not [f for f in consistent if f.severity != "INFO"],
+       "a consistent W-2 produces nothing at or above MEDIUM")
+
+ten_x = verify_docs({"w2.json": w2_doc(62000.0)})
+expect("W2.box4_ss_rate" in ids(ten_x),
+       "a W-2 whose box 4 is 10x the 6.2% rate is flagged through the registry invariants")
+expect(all(f.severity == "HIGH" for f in ten_x if f.check == "W2.box4_ss_rate"),
+       "the registry severity (HIGH) survives the conversion to a Finding")
+
+# --------------------------------------------------------------------------
+print("\nDuplicate W-2s across two files")
+
+dup = verify_docs({"w2-copy-b.json": w2_doc(6200.0), "w2-copy-2.json": w2_doc(6200.0)})
+expect("W2.duplicate" in ids(dup), "the same W-2 saved twice is flagged")
+
+other_employer = w2_doc(6200.0)
+other_employer["identity"] = dict(other_employer["identity"],
+                                  employer_ein=envelope.make("91-7654321"))
+expect("W2.duplicate" not in ids(verify_docs({"a.json": w2_doc(6200.0), "b.json": other_employer})),
+       "two W-2s from different employers are not flagged as duplicates")
+
+# --------------------------------------------------------------------------
+print("\nWhat the extractor said about its own read")
+
+disputed = w2_doc(6200.0)
+disputed["_extraction"] = {"engines": ["text", "vision"], "merged": True,
+                           "review_required": ["boxes.box_2"],
+                           "quality": {"verdict": "suspect", "reasons": ["dictionary hit ratio 0.07 is low"]}}
+ext = verify_docs({"w2.json": disputed})
+review = [f for f in ext if f.check == "EXTRACTION.review_required"]
+expect(len(review) == 1 and review[0].severity == "MEDIUM",
+       "a field the engines disagreed on is a MEDIUM finding")
+suspect = [f for f in ext if f.check == "EXTRACTION.text_suspect"]
+expect(len(suspect) == 1 and suspect[0].severity == "INFO",
+       "suspect text quality is surfaced at INFO")
+expect(not [f for f in verify_docs({"w2.json": w2_doc(6200.0)})
+            if f.check.startswith("EXTRACTION.")],
+       "a document with no _extraction block produces no extraction findings")
 
 # --------------------------------------------------------------------------
 print()

@@ -1,0 +1,19 @@
+{
+  "doc_type": "1099-NEC",
+  "tax_year": 2025,
+  "identity": {
+    "payer_name": "Cascade Financial Services Inc",
+    "payer_tin": "12-3456789",
+    "recipient_name": "Jordan A Rivera",
+    "recipient_tin": "123-45-6789",
+    "account_number": "CFS-4471-0093"
+  },
+  "boxes": {
+    "box_1": 62500.0,
+    "box_2": false,
+    "box_4": 0.0,
+    "box_5": 0.0,
+    "box_6": "WA-1234",
+    "box_7": 62500.0
+  }
+}

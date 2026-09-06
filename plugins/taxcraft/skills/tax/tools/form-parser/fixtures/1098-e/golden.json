@@ -1,0 +1,15 @@
+{
+  "doc_type": "1098-E",
+  "tax_year": 2025,
+  "identity": {
+    "payer_name": "Northline Student Loan Servicing",
+    "payer_tin": "45-6789012",
+    "recipient_name": "Jordan A Rivera",
+    "recipient_tin": "123-45-6789",
+    "account_number": "NSL-77120"
+  },
+  "boxes": {
+    "box_1": 1842.75,
+    "box_2": false
+  }
+}
