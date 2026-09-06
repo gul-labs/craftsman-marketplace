@@ -27,6 +27,7 @@ Pure stdlib. Never modifies anything.
 from __future__ import annotations
 
 import copy
+import re
 from typing import Any, Iterable, Optional
 
 STATES = (
@@ -227,15 +228,39 @@ def _norm_str(s: Any) -> str:
     return " ".join(str(s).split()).strip().casefold()
 
 
+# A rendered amount, and nothing else. Anchored end to end so a malformed token
+# cannot be salvaged into a number: stripping every "$" and "," first would turn
+# "$1$2" and "1,2" into 12, and a fabricated amount that compares equal to a real
+# one is worse than an unreadable box.
+_MONEY_STR = re.compile(r"""
+    ^\s*
+    (?P<open>\()?\s*
+    (?P<sign>[-+\u2212])?\s*
+    \$?\s*
+    (?P<sign2>[-+\u2212])?\s*
+    (?P<num>
+        \d{1,3}(?:,\d{3})+(?:\.\d*)?   # comma-grouped: 1,234 / 58,192.00
+      | \d+(?:\.\d*)?                   # plain: 58192 / 58192. / 1234.56
+      | \.\d+                            # .50
+    )
+    \s*(?P<close>\))?
+    \s*(?P<trail>-)?
+    \s*$
+""", re.VERBOSE)
+
+
 def as_money(x: Any) -> Optional[float]:
     """A rendered amount → float, or None when it is not an amount at all.
 
     Handles every way the same figure is printed on a tax form or read back by
     a model: `58192`, `58192.`, `58,192.00`, `$58,192`, and the accounting
-    negative `(500)` that means −500. Without the parenthesis case, one engine
+    negatives `(500)` and `500-`, both meaning −500. Without those, one engine
     reading `(500)` and another reading `-500` would be flagged as disagreeing
     about a number they both read correctly, and a review list full of false
     alarms is a review list nobody reads.
+
+    Anything that is not a well-formed amount returns None and is compared as
+    text instead — an EIN, a phone number, `N/A`, or a mangled token.
     """
     if isinstance(x, bool) or x is None:
         return None
@@ -243,21 +268,19 @@ def as_money(x: Any) -> Optional[float]:
         return float(x)
     if not isinstance(x, str):
         return None
-    t = x.strip().replace(",", "").replace("$", "").replace("\u2212", "-").strip()
-    neg = False
-    if t.startswith("(") and t.endswith(")"):
-        neg, t = True, t[1:-1].strip()
-    if t.endswith("-"):          # trailing-minus rendering: "500-"
-        neg, t = True, t[:-1].strip()
-    if t.endswith("."):
-        t = t[:-1]
-    if not t or t in ("-", "."):
+    m = _MONEY_STR.match(x.replace("\u2212", "-"))
+    if not m:
         return None
     try:
-        v = float(t)
+        v = float(m.group("num").replace(",", ""))
     except ValueError:
         return None
-    return -v if neg else v
+    if bool(m.group("open")) != bool(m.group("close")):
+        return None  # "(500" or "500)" is a mangled token, not an amount
+    negative = bool(m.group("open")) or bool(m.group("trail"))
+    if (m.group("sign") or m.group("sign2") or "").startswith("-"):
+        negative = not negative
+    return -v if negative else v
 
 
 # A code entry whose amount could not be read. It compares equal to nothing,
@@ -280,8 +303,7 @@ def _as_pairs(lst: Any) -> Optional[list[tuple[str, Any]]]:
     for item in lst:
         if isinstance(item, dict):
             code = _norm_str(item.get("code", item.get("label", "")))
-            raw = item.get("amount", item.get("value"))
-            parsed = as_money(raw)
+            parsed = as_money(item.get("amount", item.get("value")))
             amt: Any = _UNREADABLE_AMOUNT if parsed is None else parsed
             pairs.append((code, amt))
         else:
@@ -290,7 +312,10 @@ def _as_pairs(lst: Any) -> Optional[list[tuple[str, Any]]]:
 
 
 def values_agree(a: Any, b: Any) -> bool:
-    """Tolerant equality for the value types that appear on tax forms."""
+    """Tolerant equality for the value types that appear on tax forms.
+
+    Tolerant about how a value is *rendered*, never about what it says.
+    """
     if a is None or b is None:
         return a is None and b is None
     if isinstance(a, bool) or isinstance(b, bool):

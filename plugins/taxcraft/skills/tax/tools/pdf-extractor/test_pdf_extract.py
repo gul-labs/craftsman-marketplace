@@ -184,6 +184,17 @@ def test_values_agree() -> None:
     check(va("1,284.00", 1284.0), "a numeric string compares as a number")
     check(not va("ACME LLC", "APEX LLC"), "different names disagree")
 
+    # A malformed token is not an amount. Stripping every "$" and "," before
+    # parsing would turn "$1$2" and "1,2" into 12 — a fabricated figure that
+    # compares equal to a real one, which is worse than an unreadable box.
+    for junk in ("$1$2", "1,2", "12$", "(500", "500)", "1-2", "-", "()", "N/A"):
+        check(envelope.as_money(junk) is None, f"{junk!r} is not parsed as an amount")
+    check(envelope.as_money("12-3456789") is None, "an EIN is not parsed as an amount")
+    check(not va("12-3456789", "123456789"), "identifiers compare as text, not numbers")
+    for good, want in (("(1,000.00)", -1000.0), ("500-", -500.0), ("$ 1,234", 1234.0),
+                       ("58192.", 58192.0), (".50", 0.5), ("1,234,567.89", 1234567.89)):
+        check(envelope.as_money(good) == want, f"{good!r} parses to {want}")
+
     d = [{"code": "D", "amount": 23000.0}, {"code": "DD", "amount": 14200.0}]
     check(va(d, [{"code": "dd", "amount": 14200.0}, {"code": "d", "amount": 23000.0}]),
           "code lists compare as multisets, order- and case-insensitively")

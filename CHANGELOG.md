@@ -140,6 +140,14 @@ they found, all fixed here:
   Form 8949 does.
 - **A missing check for the costly 1099-K misread**: box 4 backup withholding
   above box 1a gross is the classic transposition, now HIGH.
+- **The Medicare lower bound omitted the additional tax.** A $250,000 W-2 must
+  withhold 1.45% plus 0.9% above $200,000. Checking only 1.45% let a box 6 of
+  $3,650 stand where $4,075 was withheld, $425 short, in silence.
+- **Malformed tokens were salvaged into numbers.** Stripping every `$` and `,`
+  before parsing turned `$1$2` and `1,2` into 12 — a fabricated figure that
+  compares equal to a real one, which is worse than an unreadable box. Amounts
+  are now matched against an anchored pattern, so an EIN, a phone number or a
+  mangled token is compared as text.
 - **Accounting negatives were read as disagreements.** `(500)` and `-500` are
   the same amount; comparing them as strings put clean reads on the review list,
   and a review list full of false alarms is one nobody reads.

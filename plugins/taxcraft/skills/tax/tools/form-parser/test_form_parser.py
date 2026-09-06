@@ -393,6 +393,23 @@ def test_w2_fica_rate_bounds() -> None:
                 box_5=envelope.make(250000), box_6=envelope.make(4075))
     check(not fired(earner), "a high earner at the wage base is not a finding", str(fired(earner)))
 
+    # The additional Medicare tax is part of the amount box 6 must report. A
+    # $250,000 W-2 owes $3,625 + $450; a box 6 of $3,650 is $425 short and must
+    # be caught, even though it clears 1.45% of box 5 on its own.
+    big = {"box_1": envelope.make(250000), "box_2": envelope.make(50000),
+           "box_3": envelope.make(176100), "box_4": envelope.make(10918),
+           "box_5": envelope.make(250000), "box_12": envelope.make([])}
+    short6 = {"doc_type": "W-2", "tax_year": 2025,
+              "boxes": {**big, "box_6": envelope.make(3650)}}
+    check("W2.box6_medicare_rate" in fired(short6),
+          "a box 6 short by the additional Medicare tax is caught", str(fired(short6)))
+    ok6 = {"doc_type": "W-2", "tax_year": 2025, "boxes": {**big, "box_6": envelope.make(4075)}}
+    check(not fired(ok6), "the same W-2 with the full $4,075 is silent", str(fired(ok6)))
+    exp6 = {"doc_type": "W-2", "tax_year": 2025,
+            "boxes": {**big, "box_6": envelope.make(3650),
+                      "box_12": envelope.make([{"code": "N", "amount": 425}])}}
+    check(not fired(exp6), "the shortfall explained by box 12 code N is silent", str(fired(exp6)))
+
     unread12 = w2(box_4=envelope.make(2000), box_6=envelope.make(725),
                   box_12=envelope.make(None, "UNREADABLE"))
     checks_run = {f["check"] for f in invariants_mod.evaluate(unread12, doc_name="w2")}

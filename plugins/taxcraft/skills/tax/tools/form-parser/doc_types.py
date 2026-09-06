@@ -197,20 +197,22 @@ W2 = DocType(
                   "box_3 + (box_7 or 0) <= rules['ss_wage_base'] + 1",
                   "Social security wages + tips exceed the year's wage base — impossible on a single W-2.",
                   ("box_3", "box_7"), when="has('box_3') and rules.get('ss_wage_base')"),
-        # Same shape as box 4. The ceiling is 1.45% of box 5 plus the 0.9%
-        # additional Medicare tax above $200,000; the floor is 1.45% less any
-        # uncollected Medicare tax reported in box 12 (code B for tips, code N
-        # for former-employee group-term life).
+        # Same shape as box 4, over ONE expected amount: 1.45% of box 5 plus the
+        # 0.9% additional Medicare tax the employer must withhold above
+        # $200,000. Leaving the additional tax out of the lower bound would let
+        # a $250,000 W-2 report $3,650 where $4,075 was withheld — $425 short —
+        # and say nothing, because 1.45% alone is only $3,625.
         Invariant("W2.box6_medicare_rate", "HIGH",
-                  "(box_6 >= box_5 * rules['medicare_rate_ee'] - max(2, 0.01 * box_6)"
-                  " and box_6 <= box_5 * rules['medicare_rate_ee']"
-                  "              + max(0, box_5 - 200000) * 0.009 + max(2, 0.01 * box_6))"
+                  "near(box_6, box_5 * rules['medicare_rate_ee']"
+                  "            + max(0, box_5 - 200000) * 0.009, tol=max(2, 0.01 * box_6))"
                   " or (box_6 < box_5 * rules['medicare_rate_ee']"
+                  "              + max(0, box_5 - 200000) * 0.009"
                   "     and box_6 >= box_5 * rules['medicare_rate_ee']"
+                  "                  + max(0, box_5 - 200000) * 0.009"
                   "                  - sum_of(box_12, 'B', 'N') - max(2, 0.01 * box_6))",
-                  "Medicare tax (box 6) is outside 1.45% of Medicare wages (box 5) plus the 0.9% "
-                  "additional-tax band, and any shortfall is not explained by uncollected tax in "
-                  "box 12 (code B or N).",
+                  "Medicare tax (box 6) is not 1.45% of Medicare wages (box 5) plus the 0.9% "
+                  "additional tax above $200,000, and any shortfall is not explained by "
+                  "uncollected tax in box 12 (code B or N).",
                   ("box_5", "box_6", "box_12"),
                   when="has('box_5') and has('box_6') and rules.get('medicare_rate_ee')"),
         Invariant("W2.box5_ge_box3", "MEDIUM", "box_5 + 1 >= box_3",
