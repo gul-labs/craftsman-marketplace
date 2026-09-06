@@ -151,8 +151,8 @@ fallback ladder whose earlier rungs handle the large majority of documents.
 |---|---|---|---|
 | `pypdf` | `parsing.md` rung 0 — read AcroForm field values exactly (IRS fillable forms, some issuer PDFs) | `python3 -c 'import pypdf'` | `pip install --user pypdf` |
 | `pdftk` | `parsing.md` rung 0 — same, when `pypdf` is absent | `command -v pdftk` | macOS `brew install pdftk-java`; Debian `sudo apt install pdftk` |
-| `ocrmypdf` | `parsing.md` rung 3 — OCR a scanned PDF in place | `command -v ocrmypdf` | `pip install --user ocrmypdf` |
-| `pdfplumber` | `parsing.md` rung 4 — stubborn table grids | `python3 -c 'import pdfplumber'` | `pip install --user pdfplumber` |
+| `ocrmypdf` | `parsing.md` rung 5 — OCR a scanned PDF in place | `command -v ocrmypdf` | `pip install --user ocrmypdf` |
+| `pdfplumber` | `parsing.md` rung 6 — stubborn table grids | `python3 -c 'import pdfplumber'` | `pip install --user pdfplumber` |
 | `beancount` (`bean-check`) | `workspace-doctor` ledger validation, for workspaces keeping Beancount books | `command -v bean-check` | `pip install --user beancount` |
 
 `beancount` is a property of the *user's workspace*, not of this skill. A

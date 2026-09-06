@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pdf-extractor"))
-from envelope import is_envelope, unwrap, is_present  # type: ignore  # noqa: E402
+from envelope import is_envelope, unwrap, is_present, state_of  # type: ignore  # noqa: E402
 
 from doc_types import DocType, Invariant, REGISTRY  # noqa: E402
 
@@ -120,8 +120,15 @@ def _pct(part: Any, whole: Any, rate: Any, tol: Any = 1.0) -> bool:
 
 
 def _sum_of(codes: Any, *wanted: str) -> float:
+    """Sum the amounts of the wanted codes in a code list (W-2 box 12, K-1 box 20).
+
+    `None` means the list was never read, which is not the same as a form with no
+    codes on it — summing it to 0 would let an unread box 12 satisfy a deferral
+    check. An observed empty list sums to 0, correctly. An entry whose amount is
+    unreadable aborts the whole sum for the same reason.
+    """
     if codes is None:
-        return 0.0
+        raise _NotEvaluable()
     if not isinstance(codes, list):
         raise _NotEvaluable()
     want = {w.upper() for w in wanted}
@@ -131,10 +138,7 @@ def _sum_of(codes: Any, *wanted: str) -> float:
             continue
         code = str(item.get("code", "")).upper().strip()
         if code in want:
-            try:
-                total += _num(item.get("amount"))
-            except _NotEvaluable:
-                continue
+            total += _num(item.get("amount"))  # raises _NotEvaluable if unreadable
     return total
 
 
@@ -154,14 +158,23 @@ def load_rules(tax_year: Optional[int]) -> dict:
 
 def flatten_boxes(doc: dict) -> dict[str, Any]:
     """{box_id: plain value or None} from a schema-2 document (`boxes` +
-    `identity` envelopes) or a legacy flat document (top-level scalars)."""
+    `identity` envelopes) or a legacy flat document (top-level scalars).
+
+    Also returns `__present__` and `__state__` side tables. The states matter:
+    a box that is NOT_PRESENT was blank on a preprinted information return,
+    which contributes nothing to a total, while a box that is UNREADABLE is one
+    the extractor failed on — a total built over it is not a total, and the
+    invariant that uses it must be skipped rather than answered.
+    """
     out: dict[str, Any] = {}
     present: dict[str, bool] = {}
+    states: dict[str, str] = {}
     if isinstance(doc.get("boxes"), dict) or isinstance(doc.get("identity"), dict):
         for section in ("identity", "boxes"):
             for k, v in (doc.get(section) or {}).items():
                 out[k] = unwrap(v)
                 present[k] = is_present(v)
+                states[k] = state_of(v) or ("OBSERVED_VALUE" if v is not None else "NOT_PRESENT")
     else:
         for k, v in doc.items():
             if k.startswith("_") or isinstance(v, (dict,)):
@@ -169,18 +182,61 @@ def flatten_boxes(doc: dict) -> dict[str, Any]:
             if is_envelope(v):
                 out[k] = unwrap(v)
                 present[k] = is_present(v)
+                states[k] = state_of(v) or "NOT_PRESENT"
             elif isinstance(v, (int, float, str, list)) and not isinstance(v, bool):
                 out[k] = v
                 present[k] = v is not None
+                states[k] = "OBSERVED_VALUE" if v is not None else "NOT_PRESENT"
             elif isinstance(v, bool):
                 out[k] = v
                 present[k] = True
+                states[k] = "OBSERVED_VALUE"
     out["__present__"] = present  # type: ignore[assignment]
+    out["__state__"] = states  # type: ignore[assignment]
     return out
+
+
+def _make_has(ns: dict, present: dict, unobserved_seen: list):
+    """`has('box_3')` — was this box actually observed?
+
+    A gate that answers False because a box was not observed is not the same as
+    a gate that answers False because the form genuinely does not apply. The
+    first means the invariant went unproven and must say so; the second is a
+    silent, correct skip. Recording the misses lets `evaluate()` tell them apart.
+    """
+    def has(name: str) -> bool:
+        ok = bool(present.get(name)) and ns.get(name) is not None
+        if not ok:
+            unobserved_seen.append(name)
+        return ok
+    return has
+
+
+def _make_sum_of_boxes(ns: dict, states: dict[str, str]):
+    """`sum_of_boxes('box_1', 'box_2', ...)` over a preprinted return.
+
+    A blank box on an information return reports nothing and contributes 0. A
+    box the extractor could not read contributes an unknown amount, so the sum —
+    and the invariant built on it — cannot be evaluated at all. Silently
+    skipping it would understate the total and let a violation pass.
+    """
+    def sum_of_boxes(*names: str) -> float:
+        total = 0.0
+        for n in names:
+            if states.get(n) == "UNREADABLE":
+                raise _NotEvaluable()
+            v = ns.get(n)
+            if v is None:
+                continue  # blank box: reports nothing
+            total += _num(v)
+        return total
+    return sum_of_boxes
 
 
 def _namespace(boxes: dict[str, Any], rules: dict, doc_type: Optional[DocType] = None) -> dict:
     present = boxes.get("__present__", {})
+    states = boxes.get("__state__", {})
+    unobserved_seen: list[str] = []
     ns: dict[str, Any] = {}
     if doc_type is not None:
         # Every box the form defines exists in the namespace, absent ones as
@@ -188,14 +244,15 @@ def _namespace(boxes: dict[str, Any], rules: dict, doc_type: Optional[DocType] =
         # while a bare `box_7` still aborts the invariant when unobserved.
         for b in (*doc_type.identity, *doc_type.boxes):
             ns[b.id] = None
-    ns.update({k: v for k, v in boxes.items() if k != "__present__"})
+    ns.update({k: v for k, v in boxes.items() if k not in ("__present__", "__state__")})
+    ns["__unobserved_seen__"] = unobserved_seen
     ns.update({
         "rules": rules,
         "near": _near,
         "pct": _pct,
-        "has": lambda name: bool(present.get(name)) and ns.get(name) is not None,
+        "has": _make_has(ns, present, unobserved_seen),
         "sum_of": _sum_of,
-        "sum_of_boxes": lambda *names: sum(_num(ns[n]) for n in names if ns.get(n) is not None),
+        "sum_of_boxes": _make_sum_of_boxes(ns, states),
         "abs": lambda x: abs(_num(x)),
         "min": lambda *xs: min(_num(x) for x in xs),
         "max": lambda *xs: max(_num(x) for x in xs),
@@ -256,8 +313,20 @@ def evaluate(doc: dict, doc_type: Optional[DocType] = None, *, doc_name: str = "
         detail = _detail(inv, ns)
         try:
             if inv.when:
+                del ns["__unobserved_seen__"][:]
                 gate = _eval(compile_expr(inv.when), ns, inv.when)
                 if not gate:
+                    if ns["__unobserved_seen__"]:
+                        # The gate closed because a box was never observed, not
+                        # because the form does not apply. Report it as unproven
+                        # rather than saying nothing, which reads as "checked, fine".
+                        missing = ", ".join(sorted(set(ns["__unobserved_seen__"])))
+                        findings.append({
+                            "severity": "INFO", "check": f"{inv.id}.not_evaluable", "doc": doc_name,
+                            "message": f"Not proven: {inv.message.split(' — ')[0].split('.')[0]} "
+                                       f"(not observed: {missing}).",
+                            "detail": detail, "fields": list(inv.fields),
+                        })
                     continue
             ok = _eval(compile_expr(inv.expr), ns, inv.expr)
         except _NotEvaluable:

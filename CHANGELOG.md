@@ -101,6 +101,47 @@ readable.
   observed as `not_evaluable` (INFO) instead of passing it on a phantom zero,
   and surfaces `review_required` paths as MEDIUM findings.
 
+### Fixed — defects an adversarial review caught before release
+
+Three independent review passes (tax-law correctness of the invariants,
+silent-wrong-value paths, doc-versus-code consistency) each returned BLOCK. What
+they found, all fixed here:
+
+- **The merge tolerance was a percentage.** At 0.5%, a text read of `58,192` and
+  a vision read of `58,483` differed by $291 and were recorded as *agreement* at
+  0.95 confidence, never reaching the review list. Two engines reading the same
+  printed number must produce the same digits; the tolerance is now half a cent,
+  which covers rendering only.
+- **An unread box-12 amount compared equal to a printed zero.** `null` and `0`
+  are "we could not read it" and "the employer printed zero"; merging them at
+  high confidence erased the difference.
+- **Unobserved inputs could satisfy an invariant silently.** An absent code list
+  summed to zero, a total skipped its unreadable members, and a guard that
+  closed because a box was never observed reported nothing at all — which reads
+  as "checked, fine". Aggregates now refuse to evaluate over an unreadable box,
+  a blank box on a preprinted return still contributes zero, and a guard that
+  closes for want of data says so as `not_evaluable`.
+- **A text-only read of a form looked final.** A PDF whose text layer carries a
+  plausible but wrong character mapping passes every text statistic while
+  reporting numbers that were never printed. A single-engine form parse is now
+  marked `vision_required`, carries a warning into the written document, and
+  exits non-zero.
+- **Six invariants would have fired on correctly issued forms.** W-2 boxes 4 and
+  6 are the tax actually *collected*, so uncollected tax on tips or group-term
+  life (box 12 codes A, B, M, N) legitimately falls below the statutory rate —
+  both are now upper bounds. The box 1 versus box 5 deferral rule is gone
+  entirely: FICA-exempt wages break it. 1099-R box 5 may exceed box 1; 1098
+  box 4 refunds a prior year's interest; a 1095-A month can carry advance credit
+  with a zero premium when coverage was terminated for nonpayment. The 1099-B
+  gain tie now limits the market-discount adjustment to the realized gain, as
+  Form 8949 does.
+- **A missing check for the costly 1099-K misread**: box 4 backup withholding
+  above box 1a gross is the classic transposition, now HIGH.
+- **`--force` silently bypassed the CRITICAL write block** the docs promised.
+  It still overrides, because that is sometimes the right call, but it now
+  stamps the override, its date, and every overridden invariant into the written
+  JSON, so a forced write cannot be mistaken for a clean one.
+
 ### Changed — method and preflight
 
 - `parsing.md` "PDF read discipline" is rewritten around the new ladder: forms

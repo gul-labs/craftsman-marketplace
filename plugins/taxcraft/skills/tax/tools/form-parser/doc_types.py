@@ -175,26 +175,35 @@ W2 = DocType(
     invariants=(
         Invariant("W2.box2_le_box1", "HIGH", "box_2 <= box_1 + 1",
                   "Federal withholding (box 2) exceeds wages (box 1) — a box was misread.", ("box_1", "box_2")),
+        # An upper bound, not an equality. Box 4 is the tax actually COLLECTED:
+        # when an employer cannot collect the tax on tips or on group-term life
+        # for a former employee, the wages still appear in boxes 3 and 7 while
+        # the uncollected tax is reported in box 12 (codes A and M). Requiring
+        # exactly 6.2% would fire on every one of those correctly issued forms.
         Invariant("W2.box4_ss_rate", "HIGH",
-                  "pct(box_4, box_3 + (box_7 or 0), rules['ss_rate_ee'], tol=max(2, 0.01 * box_4))",
-                  "Social security tax (box 4) is not 6.2% of social security wages + tips (boxes 3 + 7).",
+                  "box_4 <= (box_3 + (box_7 or 0)) * rules['ss_rate_ee'] + max(2, 0.01 * box_4)",
+                  "Social security tax (box 4) exceeds 6.2% of social security wages + tips (boxes 3 + 7).",
                   ("box_3", "box_4", "box_7"), when="has('box_3') and has('box_4') and rules.get('ss_rate_ee')"),
         Invariant("W2.box3_wage_base", "HIGH",
                   "box_3 + (box_7 or 0) <= rules['ss_wage_base'] + 1",
                   "Social security wages + tips exceed the year's wage base — impossible on a single W-2.",
                   ("box_3", "box_7"), when="has('box_3') and rules.get('ss_wage_base')"),
+        # Upper bound only, for the same reason as box 4: uncollected Medicare
+        # tax on tips (box 12 code B) and on former-employee group-term life
+        # (code N) legitimately leaves box 6 below 1.45% of box 5. The ceiling
+        # is 1.45% plus the 0.9% additional Medicare tax above $200,000.
         Invariant("W2.box6_medicare_rate", "HIGH",
-                  "box_6 >= box_5 * rules['medicare_rate_ee'] - max(2, 0.01 * box_6) and "
                   "box_6 <= box_5 * rules['medicare_rate_ee'] + max(0, box_5 - 200000) * 0.009 + max(2, 0.01 * box_6)",
-                  "Medicare tax (box 6) is outside 1.45% of Medicare wages (box 5) plus the 0.9% additional tax band.",
+                  "Medicare tax (box 6) exceeds 1.45% of Medicare wages (box 5) plus the 0.9% additional-tax band.",
                   ("box_5", "box_6"), when="has('box_5') and has('box_6') and rules.get('medicare_rate_ee')"),
         Invariant("W2.box5_ge_box3", "MEDIUM", "box_5 + 1 >= box_3",
                   "Medicare wages (box 5) are below social security wages (box 3); rare — confirm against the paper.",
                   ("box_3", "box_5")),
-        Invariant("W2.box1_vs_box5_deferrals", "MEDIUM",
-                  "box_1 <= box_5 + sum_of(box_12, 'D', 'E', 'F', 'G', 'H', 'S') + 1",
-                  "Box 1 exceeds Medicare wages plus pre-tax deferrals (box 12 D/E/F/G/H/S); check boxes 1, 5 and 12.",
-                  ("box_1", "box_5", "box_12")),
+        # There is deliberately no "box 1 <= box 5 + deferrals" invariant. The
+        # elective-deferral codes explain why box 5 can exceed box 1, not the
+        # reverse, and FICA-exempt wages (clergy electing out, the student FICA
+        # exception, certain nonresident aliens) put real wages in box 1 with
+        # box 5 blank or lower. Any such rule fires on correctly issued forms.
         Invariant("W2.box17_le_box16", "HIGH", "box_17 <= box_16 + 1",
                   "State withholding (box 17) exceeds state wages (box 16).", ("box_16", "box_17")),
         Invariant("W2.box19_le_box18", "HIGH", "box_19 <= box_18 + 1",
@@ -315,10 +324,17 @@ for _c in _B_CATS:
     ]
 _B_INV = []
 for _c in _B_CATS:
+    # Market discount is not subtracted without limit: on Form 8949 the
+    # adjustment is the LESSER of the realized gain and the accrued market
+    # discount, and that amount is reported as interest income instead. An
+    # unlimited subtraction turns a loss position into a phantom mismatch.
+    _pre = f"({_c}_proceeds - {_c}_basis + ({_c}_wash_sale or 0))"
     _B_INV.append(Invariant(
         f"1099B.{_c}.gain_ties", "HIGH",
-        f"near({_c}_gain, {_c}_proceeds - {_c}_basis + ({_c}_wash_sale or 0) - ({_c}_market_discount or 0), tol=max(2, 0.001 * abs({_c}_proceeds)))",
-        f"{_c}: gain/loss does not equal proceeds − basis + wash sale disallowed (− market discount).",
+        f"near({_c}_gain, {_pre} - min(max({_pre}, 0), ({_c}_market_discount or 0)), "
+        f"tol=max(2, 0.001 * abs({_c}_proceeds)))",
+        f"{_c}: gain/loss does not equal proceeds − basis + wash sale disallowed, less any "
+        f"accrued market discount up to the realized gain.",
         (f"{_c}_proceeds", f"{_c}_basis", f"{_c}_wash_sale", f"{_c}_gain"),
         when=f"has('{_c}_gain') and has('{_c}_proceeds') and has('{_c}_basis')"))
 
@@ -463,10 +479,17 @@ F1099_R = DocType(
                   "Federal withholding (box 4) exceeds gross distribution (box 1).", ("box_1", "box_4")),
         Invariant("1099R.capgain_le_taxable", "MEDIUM", "box_3 <= box_2a + 1",
                   "Capital gain (box 3) exceeds the taxable amount (box 2a) it is included in.", ("box_2a", "box_3")),
-        Invariant("1099R.contrib_le_gross", "MEDIUM", "box_5 <= box_1 + 1",
-                  "Employee contributions (box 5) exceed gross distribution (box 1).", ("box_1", "box_5")),
-        Invariant("1099R.state_wh_le_state_dist", "HIGH", "box_14 <= box_16 + 1",
-                  "State withholding (box 14) exceeds state distribution (box 16).", ("box_14", "box_16")),
+        # No "box 5 <= box 1" invariant: the IRS instructions expressly allow
+        # employee contributions/basis in box 5 to exceed the gross distribution,
+        # for instance when property distributed with after-tax basis is worthless.
+        # MEDIUM, not HIGH: box 16 is optional on Form 1099-R and payers often
+        # leave it blank while completing box 14. A blank box is NOT_PRESENT and
+        # skips this check outright; only a printed zero beside real withholding
+        # reaches it, which is worth a look rather than a violation.
+        Invariant("1099R.state_wh_le_state_dist", "MEDIUM", "box_14 <= box_16 + 1",
+                  "State withholding (box 14) exceeds the state distribution printed in box 16; "
+                  "payers commonly leave box 16 blank, so confirm against the form.",
+                  ("box_14", "box_16")),
         Invariant("1099R.code_present", "HIGH", "has('box_7')",
                   "Box 7 distribution code is missing — the code decides taxability and penalties; do not proceed without it.",
                   ("box_7",), when="has('box_1')"),
@@ -521,6 +544,9 @@ F1099_K = DocType(
                   ("box_1a", *[f"box_5_{m}" for m in _K_MONTHS])),
         Invariant("1099K.cnp_le_gross", "HIGH", "box_1b <= box_1a + 1",
                   "Card-not-present amount (box 1b) exceeds the gross amount (box 1a).", ("box_1a", "box_1b")),
+        Invariant("1099K.wh_le_gross", "HIGH", "box_4 <= box_1a + 1",
+                  "Backup withholding (box 4) exceeds the gross amount it was withheld from (box 1a) — "
+                  "the classic box 1a / box 4 transposition.", ("box_1a", "box_4")),
     ),
 )
 
@@ -630,11 +656,15 @@ F1098 = DocType(
         _t("box_11", "Mortgage acquisition date", r"Mortgage acquisition date", kind="date"),
     ),
     invariants=(
-        Invariant("1098.interest_plausible", "MEDIUM", "box_1 <= 0.15 * box_2 + 1",
+        # INFO, and deliberately a heuristic rather than a rule: nothing in the
+        # form forbids interest above 15% of principal (a short-lived or
+        # high-rate loan, prepaid interest, late charges). It earns its place
+        # only as a detector for boxes 1 and 2 read into each other's places.
+        Invariant("1098.interest_plausible", "INFO", "box_1 <= 0.15 * box_2 + 1",
                   "Interest received (box 1) exceeds 15% of outstanding principal (box 2); check whether boxes 1 and 2 were swapped.",
                   ("box_1", "box_2"), when="has('box_2') and box_2 > 0"),
-        Invariant("1098.refund_le_interest", "MEDIUM", "box_4 <= box_1 + 1",
-                  "Refund of overpaid interest (box 4) exceeds interest received (box 1); unusual — confirm.", ("box_1", "box_4")),
+        # No "box 4 <= box 1" invariant: box 4 refunds interest overpaid in a
+        # PRIOR year and bears no required relationship to this year's box 1.
     ),
     notes="Box 2 is the principal as of Jan 1 (or origination). Property tax often appears in box 10 or a footer, not a numbered box.",
 )
@@ -728,7 +758,9 @@ F5498 = DocType(
     invariants=(
         Invariant("5498.contrib_limit", "MEDIUM",
                   "box_1 + (box_10 or 0) <= rules['ira_trad_roth'] + (rules.get('ira_catchup_50') or 0) + 1",
-                  "IRA + Roth contributions exceed the year's limit plus catch-up; either an excess contribution or a misread.",
+                  "IRA + Roth contributions exceed the year's limit plus catch-up. A trustee must report an "
+                  "excess contribution, so a correctly issued form can say this — treat it as either a real "
+                  "excess contribution (6% excise tax per year until corrected) or a misread, and resolve which.",
                   ("box_1", "box_10"), when="has('box_1') and rules.get('ira_trad_roth')"),
         Invariant("5498.insurance_le_contrib", "MEDIUM", "box_6 <= box_1 + 1",
                   "Life insurance cost (box 6) exceeds the box 1 contributions it is included in.", ("box_1", "box_6")),
@@ -783,9 +815,14 @@ _A_INV = [
               "Line 33 column C annual total does not equal the sum of the monthly advance credit.", ("annual_aptc",)),
 ]
 for _mo in _A_MONTHS:
-    _A_INV.append(Invariant(f"1095A.{_mo}_aptc_le_premium", "HIGH", f"{_mo}_aptc <= {_mo}_premium + 1",
+    # Exempt the all-zero-premium month. When coverage is terminated for
+    # nonpayment the Marketplace reports columns A and B as zero while column C
+    # still carries the advance credit already paid, which the taxpayer must
+    # reconcile. Requiring C <= A unconditionally fires on those valid forms.
+    _A_INV.append(Invariant(f"1095A.{_mo}_aptc_le_premium", "HIGH",
+                            f"({_mo}_premium == 0 and {_mo}_slcsp == 0) or {_mo}_aptc <= {_mo}_premium + 1",
                             f"{_mo.title()}: advance credit (col C) exceeds the enrollment premium (col A).",
-                            (f"{_mo}_premium", f"{_mo}_aptc")))
+                            (f"{_mo}_premium", f"{_mo}_slcsp", f"{_mo}_aptc")))
 
 F1095_A = DocType(
     name="1095-A", title="Health Insurance Marketplace Statement",

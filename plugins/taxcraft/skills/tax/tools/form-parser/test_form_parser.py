@@ -312,13 +312,22 @@ def test_write_and_exit_codes() -> None:
         pdf = Path(tmp) / "w2.pdf"
         shutil.copyfile(FIXTURES / "w-2" / "text.pdf", pdf)
         out = run_cli([str(pdf), "--type", "W-2", "--write", "--quiet"])
-        check(out.returncode == 0, "a clean parse exits 0", out.stdout + out.stderr)
+        # A text-only parse of a boxed form exits 1 on purpose: it is provisional
+        # until a second engine confirms it, because a wrong font encoding yields
+        # confident wrong numbers that no text statistic can see. It still writes,
+        # carrying the flag that says so.
+        check(out.returncode == 1, "a text-only form parse exits 1 (provisional)",
+              out.stdout + out.stderr)
         written = Path(tmp) / ".parsed" / "w2.json"
         check(written.is_file(), "--write lands in <pdf dir>/.parsed/<stem>.json")
         if written.is_file():
             doc = json.loads(written.read_text())
             check(doc["schema_version"] == 2, "the written document is schema_version 2")
             check(doc["_extraction"]["sha256"], "the written document records the source hash")
+            check(doc["_extraction"].get("vision_required") is True,
+                  "a text-only form parse is marked vision_required")
+            check(any("provisional" in w for w in doc.get("warnings", [])),
+                  "the provisional warning reaches the written document")
 
         out = run_cli([str(pdf), "--type", "K-1-1065"])
         check(out.returncode == 2, "a foreign doc type is exit 2", str(out.returncode))

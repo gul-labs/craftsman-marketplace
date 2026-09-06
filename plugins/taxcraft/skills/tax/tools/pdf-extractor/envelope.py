@@ -207,32 +207,58 @@ def _split_path(path: str) -> list:
 # Comparison
 # --------------------------------------------------------------------------
 
+# Two engines reading the SAME printed number must produce the same digits. The
+# only legitimate difference is how the amount was rendered — "58192", "58192.",
+# "58,192.00" all parse to the same float — so the tolerance covers sub-cent
+# float noise and nothing else.
+#
+# A percentage tolerance is actively dangerous here: 0.5% of a $58,192 wage box
+# is $291, so a genuine misread of the hundreds digit would be recorded as
+# agreement at 0.95 confidence and never reach the review list. There is no
+# amount of drift a correct extraction produces, so there is no band to allow.
+MONEY_TOL = 0.005
+
+
 def _money_tol(v: float) -> float:
-    # Whole-dollar forms round; percent-of-value absorbs cents rendering drift.
-    return max(1.0, 0.005 * abs(v))
+    return MONEY_TOL
 
 
 def _norm_str(s: Any) -> str:
     return " ".join(str(s).split()).strip().casefold()
 
 
-def _as_pairs(lst: Any) -> Optional[list[tuple[str, float]]]:
-    """Code lists (box 12, box 14, box 20) → sorted (code, amount) pairs."""
+# A code entry whose amount could not be read. It compares equal to nothing,
+# including another unreadable amount, so an unread box-12 line can never be
+# mistaken for an agreed zero.
+_UNREADABLE_AMOUNT = object()
+
+
+def _as_pairs(lst: Any) -> Optional[list[tuple[str, Any]]]:
+    """Code lists (box 12, box 14, box 20) → sorted (code, amount) pairs.
+
+    An absent or unparseable amount becomes `_UNREADABLE_AMOUNT`, never 0.0:
+    `[{"code": "D", "amount": null}]` and `[{"code": "D", "amount": 0}]` are a
+    box we failed to read and a box the employer printed as zero, and treating
+    them as equal would merge them at high confidence.
+    """
     if not isinstance(lst, list):
         return None
-    pairs = []
+    pairs: list[tuple[str, Any]] = []
     for item in lst:
         if isinstance(item, dict):
             code = _norm_str(item.get("code", item.get("label", "")))
-            amt = item.get("amount", item.get("value"))
-            try:
-                amt = float(amt) if amt is not None else 0.0
-            except (TypeError, ValueError):
-                amt = 0.0
+            raw = item.get("amount", item.get("value"))
+            if raw is None:
+                amt: Any = _UNREADABLE_AMOUNT
+            else:
+                try:
+                    amt = float(raw)
+                except (TypeError, ValueError):
+                    amt = _UNREADABLE_AMOUNT
             pairs.append((code, amt))
         else:
-            pairs.append((_norm_str(item), 0.0))
-    return sorted(pairs)
+            pairs.append((_norm_str(item), _UNREADABLE_AMOUNT))
+    return sorted(pairs, key=lambda p: (p[0], "" if p[1] is _UNREADABLE_AMOUNT else f"{p[1]:.2f}"))
 
 
 def values_agree(a: Any, b: Any) -> bool:
@@ -247,8 +273,14 @@ def values_agree(a: Any, b: Any) -> bool:
         pa, pb = _as_pairs(a), _as_pairs(b)
         if pa is None or pb is None or len(pa) != len(pb):
             return False
-        return all(ca == cb and abs(xa - xb) <= _money_tol(max(abs(xa), abs(xb)))
-                   for (ca, xa), (cb, xb) in zip(pa, pb))
+        for (ca, xa), (cb, xb) in zip(pa, pb):
+            if ca != cb:
+                return False
+            if xa is _UNREADABLE_AMOUNT or xb is _UNREADABLE_AMOUNT:
+                return False  # unread is not equal to anything, including unread
+            if abs(xa - xb) > _money_tol(max(abs(xa), abs(xb))):
+                return False
+        return True
     # Try numeric strings before falling back to string compare.
     try:
         fa, fb = float(str(a).replace(",", "").replace("$", "")), float(str(b).replace(",", "").replace("$", ""))

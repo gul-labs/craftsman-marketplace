@@ -29,6 +29,7 @@ Pure stdlib. Writes nothing except where `--write` is told to.
 from __future__ import annotations
 
 import argparse
+import datetime
 import hashlib
 import json
 import re
@@ -914,6 +915,22 @@ def parse(pdf_path: str | Path, doc_type: Optional[str] = None, *,
     if not engines:
         ext["review_required"] = sorted(set(ext["review_required"]) | {"boxes"})
 
+    # A text-only read of a boxed form is never final. Every statistic the
+    # quality gate measures can be satisfied by a PDF whose text layer carries a
+    # plausible but WRONG character mapping: the words are real words, the
+    # anchors are there, and box 1 still says a number that was never printed.
+    # Only a second, independent read of the page — vision, or the form's own
+    # AcroForm values — can catch that, so say so in the document rather than
+    # letting a single-engine parse read as a finished one.
+    if engines == ["text"]:
+        ext["vision_required"] = True
+        ext["review_required"] = sorted(set(ext["review_required"]) | {"boxes"})
+        warnings.append(
+            "Read from layout text only. A wrong-but-plausible font encoding produces "
+            "confident, wrong numbers that no text statistic detects, so this parse is "
+            "provisional: run --vision-prompt, read the page images, and --merge before "
+            "these figures reach a workpaper.")
+
     doc.setdefault("warnings", [])
     doc["warnings"] = list(dict.fromkeys(list(doc["warnings"]) + warnings))
     doc["schema_version"] = SCHEMA_VERSION
@@ -1015,7 +1032,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                     help="merge a filled vision skeleton into the text read")
     ap.add_argument("--write", action="store_true",
                     help="write <pdf dir>/.parsed/<stem>.json")
-    ap.add_argument("--force", action="store_true",
+    ap.add_argument("--force", action="store_true",  # records the override in the written file
                     help="write even when an invariant blocks the parse")
     ap.add_argument("--quiet", action="store_true", help="suppress the human summary")
     args = ap.parse_args(argv)
@@ -1068,12 +1085,30 @@ def main(argv: Optional[list[str]] = None) -> int:
             print("Refusing to write: a CRITICAL invariant says this document contradicts "
                   "itself. Resolve it, or re-run with --force and record why.", file=sys.stderr)
             return 1
+        if ext.get("blocked") and args.force:
+            # An override is a decision, and a decision that leaves no trace is
+            # indistinguishable from a document that passed. Stamp it into the
+            # written JSON, naming every invariant that was overridden, so the
+            # next reader of this workpaper sees what was waved through.
+            ext["forced_write"] = {
+                "overridden_at": datetime.date.today().isoformat(),
+                "overridden_findings": [f["check"] for f in (ext.get("findings") or [])
+                                        if f["severity"] == "CRITICAL"],
+                "note": "Written with --force over a CRITICAL invariant. The document "
+                        "contradicts itself; these figures are not verified.",
+            }
+            doc.setdefault("warnings", []).append(
+                "Written with --force over a CRITICAL invariant — figures unverified. "
+                "Record the reason in open-questions.md.")
         out_dir = path.resolve().parent / ".parsed"
         out_dir.mkdir(parents=True, exist_ok=True)
         out = out_dir / f"{path.stem}.json"
         out.write_text(json.dumps(doc, indent=2) + "\n")
         if not args.quiet:
             print(f"  wrote {out}")
+        if ext.get("forced_write"):
+            print("  NOTE: written over a CRITICAL finding; the file records the override.",
+                  file=sys.stderr)
 
     return 1 if (worst >= _SEV_ORDER["HIGH"] or review) else 0
 

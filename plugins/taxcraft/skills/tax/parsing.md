@@ -43,7 +43,7 @@ That is why forms are read by vision first and text second, and why the two are
 | 1 | Rasterize → `Read` the PNGs (vision), fill the doc type's JSON skeleton | core |
 | 2 | `pdftotext -layout` → **text-quality gate** → anchor parse | core |
 | 3 | Merge rungs 1 + 2 field by field; disagreements go to `review_required` | core |
-| 4 | Layer B invariants (`tools/parse-verify/verify.py`) — CRITICAL blocks the write | core |
+| 4 | Layer B invariants (`tools/parse-verify/verify.py`) — CRITICAL blocks the write unless explicitly overridden | core |
 | 5 | `ocrmypdf` → re-run rung 2 | `command -v ocrmypdf` |
 | 6 | `pdfplumber` table extraction | `python3 -c 'import pdfplumber'` |
 | 7 | Machine-local or hosted extractor (see below) | `.claude/tax-pdf-tools.local.md` |
@@ -85,7 +85,11 @@ The text pass runs behind the quality gate, both reads are merged per field, the
 registry invariants run, and the result carries `_extraction.review_required` — the
 boxes where the two reads disagree. **Every path in `review_required` is checked by
 eye against the PNG before the JSON is written to `.parsed/`.** Add `--write` once
-that is done; it refuses to write a document with a CRITICAL finding.
+that is done; it refuses to write a document with a CRITICAL finding. `--force`
+overrides that refusal and is the only way past it — it stamps the override, the
+date, and every overridden invariant into the written JSON, so a forced write is
+visible to whoever reads the workpaper next. Record the reason in
+`open-questions.md` at the same time.
 
 Doc types the form parser knows (`tools/form-parser/doc_types.py`): W-2, W-2G,
 1099-INT, 1099-DIV, 1099-B (summary), 1099-Composite, 1099-NEC, 1099-MISC, 1099-R,
