@@ -163,8 +163,16 @@ def test_doc_type_detection() -> None:
 
 def test_values_agree() -> None:
     va = envelope.values_agree
-    check(va(1000.0, 1000.40), "money agrees within the whole-dollar tolerance")
-    check(va(145000.0, 145600.0), "money agrees within 0.5% on large amounts")
+    # Two engines reading one printed number must produce the same digits. A
+    # 40-cent or $600 gap is not drift, it is a misread — and a tolerance wide
+    # enough to swallow it hides exactly the error this whole pipeline exists
+    # to surface. Only rendering differences are forgiven.
+    check(not va(1000.0, 1000.40), "a 40-cent gap is a disagreement, not drift")
+    check(not va(145000.0, 145600.0), "a $600 gap on a large box is a disagreement")
+    check(va(58192.0, 58192.00), "the same amount agrees with itself")
+    check(va("(500)", -500.0), "an accounting negative equals its signed value")
+    check(va("500-", -500.0), "a trailing-minus rendering equals its signed value")
+    check(not va("(500)", 500.0), "a sign flip is a disagreement")
     check(not va(1000.0, 1010.0), "a $10 difference on $1,000 is a disagreement")
     check(not va(145000.0, 152000.0), "a 4.8% difference is a disagreement")
     check(va(0, 0.0), "zero agrees with zero")
@@ -177,8 +185,12 @@ def test_values_agree() -> None:
     check(not va("ACME LLC", "APEX LLC"), "different names disagree")
 
     d = [{"code": "D", "amount": 23000.0}, {"code": "DD", "amount": 14200.0}]
-    check(va(d, [{"code": "dd", "amount": 14200.4}, {"code": "d", "amount": 23000.0}]),
+    check(va(d, [{"code": "dd", "amount": 14200.0}, {"code": "d", "amount": 23000.0}]),
           "code lists compare as multisets, order- and case-insensitively")
+    check(not va(d, [{"code": "dd", "amount": 14200.4}, {"code": "d", "amount": 23000.0}]),
+          "a cents gap inside a code list is a disagreement")
+    check(not va([{"code": "D", "amount": None}], [{"code": "D", "amount": 0}]),
+          "an unread code amount is not equal to a printed zero")
     check(not va(d, [{"code": "D", "amount": 23000.0}]),
           "a code list missing an entry disagrees")
     check(not va(d, [{"code": "D", "amount": 23000.0}, {"code": "DD", "amount": 1420.0}]),
@@ -359,7 +371,16 @@ def test_compare_fields(tmp: Path) -> None:
     close_path.write_text(json.dumps(close), encoding="utf-8")
     proc = subprocess.run([sys.executable, "-B", script, "--fields", str(a_path), str(close_path)],
                           capture_output=True, text=True)
-    check(proc.returncode == 0, "cents-level drift is not reported as a disagreement")
+    check(proc.returncode == 1, "a cents-level gap between two parses is reported")
+
+    # A pure rendering difference is not a disagreement.
+    same = json.loads(json.dumps(a))
+    same["boxes"]["box_2"] = envelope.make("28,400.00", page=1, box="2")
+    same_path = tmp / "same.json"
+    same_path.write_text(json.dumps(same), encoding="utf-8")
+    proc = subprocess.run([sys.executable, "-B", script, "--fields", str(a_path), str(same_path)],
+                          capture_output=True, text=True)
+    check(proc.returncode == 0, "the same amount rendered differently is not a disagreement")
 
 
 # --------------------------------------------------------------------------

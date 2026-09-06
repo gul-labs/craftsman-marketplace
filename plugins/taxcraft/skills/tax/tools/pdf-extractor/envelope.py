@@ -227,6 +227,39 @@ def _norm_str(s: Any) -> str:
     return " ".join(str(s).split()).strip().casefold()
 
 
+def as_money(x: Any) -> Optional[float]:
+    """A rendered amount → float, or None when it is not an amount at all.
+
+    Handles every way the same figure is printed on a tax form or read back by
+    a model: `58192`, `58192.`, `58,192.00`, `$58,192`, and the accounting
+    negative `(500)` that means −500. Without the parenthesis case, one engine
+    reading `(500)` and another reading `-500` would be flagged as disagreeing
+    about a number they both read correctly, and a review list full of false
+    alarms is a review list nobody reads.
+    """
+    if isinstance(x, bool) or x is None:
+        return None
+    if isinstance(x, (int, float)):
+        return float(x)
+    if not isinstance(x, str):
+        return None
+    t = x.strip().replace(",", "").replace("$", "").replace("\u2212", "-").strip()
+    neg = False
+    if t.startswith("(") and t.endswith(")"):
+        neg, t = True, t[1:-1].strip()
+    if t.endswith("-"):          # trailing-minus rendering: "500-"
+        neg, t = True, t[:-1].strip()
+    if t.endswith("."):
+        t = t[:-1]
+    if not t or t in ("-", "."):
+        return None
+    try:
+        v = float(t)
+    except ValueError:
+        return None
+    return -v if neg else v
+
+
 # A code entry whose amount could not be read. It compares equal to nothing,
 # including another unreadable amount, so an unread box-12 line can never be
 # mistaken for an agreed zero.
@@ -248,13 +281,8 @@ def _as_pairs(lst: Any) -> Optional[list[tuple[str, Any]]]:
         if isinstance(item, dict):
             code = _norm_str(item.get("code", item.get("label", "")))
             raw = item.get("amount", item.get("value"))
-            if raw is None:
-                amt: Any = _UNREADABLE_AMOUNT
-            else:
-                try:
-                    amt = float(raw)
-                except (TypeError, ValueError):
-                    amt = _UNREADABLE_AMOUNT
+            parsed = as_money(raw)
+            amt: Any = _UNREADABLE_AMOUNT if parsed is None else parsed
             pairs.append((code, amt))
         else:
             pairs.append((_norm_str(item), _UNREADABLE_AMOUNT))
@@ -281,12 +309,10 @@ def values_agree(a: Any, b: Any) -> bool:
             if abs(xa - xb) > _money_tol(max(abs(xa), abs(xb))):
                 return False
         return True
-    # Try numeric strings before falling back to string compare.
-    try:
-        fa, fb = float(str(a).replace(",", "").replace("$", "")), float(str(b).replace(",", "").replace("$", ""))
+    # Two renderings of the same amount are the same amount.
+    fa, fb = as_money(a), as_money(b)
+    if fa is not None and fb is not None:
         return abs(fa - fb) <= _money_tol(max(abs(fa), abs(fb)))
-    except ValueError:
-        pass
     return _norm_str(a) == _norm_str(b)
 
 

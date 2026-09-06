@@ -347,6 +347,59 @@ def run_cli(args: list[str]) -> subprocess.CompletedProcess:
 
 # --------------------------------------------------------------------------
 
+def test_w2_fica_rate_bounds() -> None:
+    """Boxes 4 and 6 are bounded on BOTH sides, with a documented escape.
+
+    These are the checks most likely to be loosened by accident. Box 4 is the
+    social security tax actually collected, so it may fall below 6.2% of boxes
+    3 + 7 — but only by the uncollected tax the employer reports in box 12
+    (code A for tips, code M for former-employee group-term life). An upper
+    bound alone would let a box 4 misread as $2,000 where $3,100 was printed
+    pass in silence, which is the exact transposition the check exists for.
+    """
+    def w2(**over):
+        boxes = {"box_1": envelope.make(50000), "box_2": envelope.make(5000),
+                 "box_3": envelope.make(50000), "box_5": envelope.make(50000),
+                 "box_12": envelope.make([])}
+        boxes.update(over)
+        return {"doc_type": "W-2", "tax_year": 2025, "boxes": boxes}
+
+    def fired(doc):
+        # Only the rate checks are under test here; these skeleton documents
+        # carry no identity block, whose absence is its own (correct) finding.
+        return {f["check"] for f in invariants_mod.evaluate(doc, doc_name="w2")
+                if f["severity"] in ("HIGH", "CRITICAL")
+                and not f["check"].endswith("required_missing")}
+
+    correct = w2(box_4=envelope.make(3100), box_6=envelope.make(725))
+    check(not fired(correct), "a consistent W-2 raises no rate finding", str(fired(correct)))
+
+    low = w2(box_4=envelope.make(2000), box_6=envelope.make(500))
+    check("W2.box4_ss_rate" in fired(low), "box 4 read too LOW is caught")
+    check("W2.box6_medicare_rate" in fired(low), "box 6 read too LOW is caught")
+
+    high = w2(box_4=envelope.make(4000), box_6=envelope.make(725))
+    check("W2.box4_ss_rate" in fired(high), "box 4 read too HIGH is caught")
+
+    uncollected = w2(box_4=envelope.make(1900), box_6=envelope.make(445),
+                     box_12=envelope.make([{"code": "A", "amount": 1200},
+                                           {"code": "B", "amount": 280}]))
+    check(not fired(uncollected),
+          "a shortfall explained by uncollected tax in box 12 is not a finding",
+          str(fired(uncollected)))
+
+    # Wages at the wage base with the 0.9% additional Medicare tax above $200k.
+    earner = w2(box_3=envelope.make(176100), box_4=envelope.make(10918),
+                box_5=envelope.make(250000), box_6=envelope.make(4075))
+    check(not fired(earner), "a high earner at the wage base is not a finding", str(fired(earner)))
+
+    unread12 = w2(box_4=envelope.make(2000), box_6=envelope.make(725),
+                  box_12=envelope.make(None, "UNREADABLE"))
+    checks_run = {f["check"] for f in invariants_mod.evaluate(unread12, doc_name="w2")}
+    check("W2.box4_ss_rate.not_evaluable" in checks_run,
+          "a shortfall with box 12 unread is reported as unproven, not passed")
+
+
 TESTS = [
     test_number_parsing,
     test_money_tokens,
@@ -358,6 +411,7 @@ TESTS = [
     test_unknown_and_foreign_types,
     test_fixtures,
     test_invariants_fire_only_when_they_should,
+    test_w2_fica_rate_bounds,
     test_garbage_is_refused,
     test_scan_yields_vision_prompt,
     test_acroform,

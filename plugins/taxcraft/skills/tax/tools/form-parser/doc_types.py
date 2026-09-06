@@ -175,27 +175,44 @@ W2 = DocType(
     invariants=(
         Invariant("W2.box2_le_box1", "HIGH", "box_2 <= box_1 + 1",
                   "Federal withholding (box 2) exceeds wages (box 1) — a box was misread.", ("box_1", "box_2")),
-        # An upper bound, not an equality. Box 4 is the tax actually COLLECTED:
-        # when an employer cannot collect the tax on tips or on group-term life
-        # for a former employee, the wages still appear in boxes 3 and 7 while
-        # the uncollected tax is reported in box 12 (codes A and M). Requiring
-        # exactly 6.2% would fire on every one of those correctly issued forms.
+        # Box 4 is the tax actually COLLECTED, so it can fall below 6.2% of
+        # boxes 3 + 7 — but only by the amount the employer reports as
+        # uncollected in box 12 (code A for tips, code M for former-employee
+        # group-term life). A bare upper bound would let box 4 read as $2,000
+        # where $3,100 was printed and say nothing, which is precisely the
+        # transposition this check exists to catch. The clauses short-circuit:
+        # a box 4 at the full rate never needs box 12 read at all, and only a
+        # shortfall has to account for itself.
         Invariant("W2.box4_ss_rate", "HIGH",
-                  "box_4 <= (box_3 + (box_7 or 0)) * rules['ss_rate_ee'] + max(2, 0.01 * box_4)",
-                  "Social security tax (box 4) exceeds 6.2% of social security wages + tips (boxes 3 + 7).",
-                  ("box_3", "box_4", "box_7"), when="has('box_3') and has('box_4') and rules.get('ss_rate_ee')"),
+                  "near(box_4, (box_3 + (box_7 or 0)) * rules['ss_rate_ee'], tol=max(2, 0.01 * box_4))"
+                  " or (box_4 < (box_3 + (box_7 or 0)) * rules['ss_rate_ee']"
+                  "     and box_4 >= (box_3 + (box_7 or 0)) * rules['ss_rate_ee']"
+                  "                  - sum_of(box_12, 'A', 'M') - max(2, 0.01 * box_4))",
+                  "Social security tax (box 4) is not 6.2% of social security wages + tips "
+                  "(boxes 3 + 7), and the shortfall is not explained by uncollected tax in "
+                  "box 12 (code A or M).",
+                  ("box_3", "box_4", "box_7", "box_12"),
+                  when="has('box_3') and has('box_4') and rules.get('ss_rate_ee')"),
         Invariant("W2.box3_wage_base", "HIGH",
                   "box_3 + (box_7 or 0) <= rules['ss_wage_base'] + 1",
                   "Social security wages + tips exceed the year's wage base — impossible on a single W-2.",
                   ("box_3", "box_7"), when="has('box_3') and rules.get('ss_wage_base')"),
-        # Upper bound only, for the same reason as box 4: uncollected Medicare
-        # tax on tips (box 12 code B) and on former-employee group-term life
-        # (code N) legitimately leaves box 6 below 1.45% of box 5. The ceiling
-        # is 1.45% plus the 0.9% additional Medicare tax above $200,000.
+        # Same shape as box 4. The ceiling is 1.45% of box 5 plus the 0.9%
+        # additional Medicare tax above $200,000; the floor is 1.45% less any
+        # uncollected Medicare tax reported in box 12 (code B for tips, code N
+        # for former-employee group-term life).
         Invariant("W2.box6_medicare_rate", "HIGH",
-                  "box_6 <= box_5 * rules['medicare_rate_ee'] + max(0, box_5 - 200000) * 0.009 + max(2, 0.01 * box_6)",
-                  "Medicare tax (box 6) exceeds 1.45% of Medicare wages (box 5) plus the 0.9% additional-tax band.",
-                  ("box_5", "box_6"), when="has('box_5') and has('box_6') and rules.get('medicare_rate_ee')"),
+                  "(box_6 >= box_5 * rules['medicare_rate_ee'] - max(2, 0.01 * box_6)"
+                  " and box_6 <= box_5 * rules['medicare_rate_ee']"
+                  "              + max(0, box_5 - 200000) * 0.009 + max(2, 0.01 * box_6))"
+                  " or (box_6 < box_5 * rules['medicare_rate_ee']"
+                  "     and box_6 >= box_5 * rules['medicare_rate_ee']"
+                  "                  - sum_of(box_12, 'B', 'N') - max(2, 0.01 * box_6))",
+                  "Medicare tax (box 6) is outside 1.45% of Medicare wages (box 5) plus the 0.9% "
+                  "additional-tax band, and any shortfall is not explained by uncollected tax in "
+                  "box 12 (code B or N).",
+                  ("box_5", "box_6", "box_12"),
+                  when="has('box_5') and has('box_6') and rules.get('medicare_rate_ee')"),
         Invariant("W2.box5_ge_box3", "MEDIUM", "box_5 + 1 >= box_3",
                   "Medicare wages (box 5) are below social security wages (box 3); rare — confirm against the paper.",
                   ("box_3", "box_5")),

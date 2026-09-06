@@ -128,8 +128,11 @@ they found, all fixed here:
   exits non-zero.
 - **Six invariants would have fired on correctly issued forms.** W-2 boxes 4 and
   6 are the tax actually *collected*, so uncollected tax on tips or group-term
-  life (box 12 codes A, B, M, N) legitimately falls below the statutory rate —
-  both are now upper bounds. The box 1 versus box 5 deferral rule is gone
+  life legitimately falls below the statutory rate. Both are now bounded on each
+  side, with the shortfall allowed only up to the uncollected tax the employer
+  reports in box 12 (code A or M for social security, B or N for Medicare) —
+  a bare upper bound would have let a box 4 read as $2,000 where $3,100 was
+  printed pass in silence. The box 1 versus box 5 deferral rule is gone
   entirely: FICA-exempt wages break it. 1099-R box 5 may exceed box 1; 1098
   box 4 refunds a prior year's interest; a 1095-A month can carry advance credit
   with a zero premium when coverage was terminated for nonpayment. The 1099-B
@@ -137,6 +140,9 @@ they found, all fixed here:
   Form 8949 does.
 - **A missing check for the costly 1099-K misread**: box 4 backup withholding
   above box 1a gross is the classic transposition, now HIGH.
+- **Accounting negatives were read as disagreements.** `(500)` and `-500` are
+  the same amount; comparing them as strings put clean reads on the review list,
+  and a review list full of false alarms is one nobody reads.
 - **`--force` silently bypassed the CRITICAL write block** the docs promised.
   It still overrides, because that is sometimes the right call, but it now
   stamps the override, its date, and every overridden invariant into the written
