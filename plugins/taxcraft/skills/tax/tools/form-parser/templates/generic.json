@@ -1,0 +1,19 @@
+{
+  "_comment": [
+    "The schema documentation, and the no-op default. This file matches nothing:",
+    "an empty `match` block is never selected, so shipping it changes no parse.",
+    "Copy it to <vendor>.json, fill in `match`, and override only the boxes whose",
+    "labels that vendor prints differently from the IRS form."
+  ],
+  "match": {},
+  "doc_type": null,
+  "box_patterns": {},
+  "value_side": "right",
+  "_schema": {
+    "match.producer": "regex tested against the PDF's /Producer string (case-insensitive)",
+    "match.creator": "regex tested against the PDF's /Creator string (case-insensitive)",
+    "doc_type": "optional; when set, the template only applies to that registry doc type",
+    "box_patterns": "{box_id: [regex, ...]} — replaces doc_types.py patterns for that box",
+    "value_side": "'right' (value follows the label on the same line) or 'below' (value sits under the label's column)"
+  }
+}

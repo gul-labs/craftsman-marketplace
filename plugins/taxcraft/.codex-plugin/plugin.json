@@ -1,6 +1,6 @@
 {
   "name": "taxcraft",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "US tax and accounting work for people whose situation outgrew consumer software but who still do the prep themselves: multiple entities, late and wrong K-1s, basis and carryforwards nobody is tracking, quarterly estimates guessed at rather than computed. Builds the workpapers a CPA would build — transaction-level books from raw statements, reconciled balance sheets, partner and shareholder basis, carryforward schedules, 1040-ES and corporate estimates — and shows the math with the Code section behind it. Covers 1040, 1065, 1120-S, 1120, disregarded SMLLCs, and corporate governance records. Does not file returns and is not tax advice.",
   "author": {
     "name": "Atif Gul",

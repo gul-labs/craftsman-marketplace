@@ -1,0 +1,26 @@
+{
+  "doc_type": "W-2G",
+  "tax_year": 2025,
+  "identity": {
+    "payer_name": "Cascade Financial Services Inc",
+    "payer_tin": "12-3456789",
+    "recipient_name": "Jordan A Rivera",
+    "recipient_tin": "123-45-6789",
+    "account_number": "CFS-4471-0093"
+  },
+  "boxes": {
+    "box_1": 5000.0,
+    "box_2": "2025-07-04",
+    "box_3": "Slot machine",
+    "box_4": 1200.0,
+    "box_5": "TX-88120",
+    "box_7": 0.0,
+    "box_9": "123-45-6789",
+    "box_13_state": "NV-4471",
+    "box_14": 5000.0,
+    "box_15": 0.0,
+    "box_16": 0.0,
+    "box_17": 0.0,
+    "box_18": "LAS VEGAS"
+  }
+}

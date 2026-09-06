@@ -1,0 +1,48 @@
+{
+  "doc_type": "W-2",
+  "tax_year": 2025,
+  "identity": {
+    "employee_ssn": "123-45-6789",
+    "employer_ein": "12-3456789",
+    "employer_name": "Northwater Logistics LLC",
+    "control_number": "A-0042175",
+    "employee_name": "Jordan A Rivera"
+  },
+  "boxes": {
+    "box_1": 105000.0,
+    "box_2": 16800.0,
+    "box_3": 117000.0,
+    "box_4": 72540.0,
+    "box_5": 117000.0,
+    "box_6": 1696.5,
+    "box_8": 0.0,
+    "box_10": 5000.0,
+    "box_11": 0.0,
+    "box_12": [
+      {
+        "code": "D",
+        "amount": 12000.0
+      },
+      {
+        "code": "DD",
+        "amount": 9600.0
+      }
+    ],
+    "box_13_statutory_employee": false,
+    "box_13_retirement_plan": true,
+    "box_13_third_party_sick_pay": false,
+    "box_14": [
+      {
+        "code": "UNION",
+        "amount": 480.0
+      }
+    ],
+    "box_15_state": "OH",
+    "box_15_employer_state_id": "OH-99887",
+    "box_16": 105000.0,
+    "box_17": 5250.0,
+    "box_18": 105000.0,
+    "box_19": 1050.0,
+    "box_20": "CINCINNATI"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "doc_type": "5498",
+  "tax_year": 2025,
+  "identity": {
+    "payer_name": "Harborline Trust Company",
+    "payer_tin": "23-4567890",
+    "recipient_name": "Jordan A Rivera",
+    "recipient_tin": "123-45-6789",
+    "account_number": "HTC-1120-IRA"
+  },
+  "boxes": {
+    "box_1": 7000.0,
+    "box_2": 0.0,
+    "box_3": 0.0,
+    "box_4": 0.0,
+    "box_5": 152340.0,
+    "box_6": 0.0,
+    "box_7_ira": true,
+    "box_7_sep": false,
+    "box_7_simple": false,
+    "box_7_roth": false,
+    "box_8": 0.0,
+    "box_9": 0.0,
+    "box_10": 0.0,
+    "box_11": false,
+    "box_12b": 0.0,
+    "box_13a": 0.0,
+    "box_14a": 0.0,
+    "box_15a": 0.0
+  }
+}

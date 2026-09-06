@@ -21,12 +21,23 @@ Design notes:
   `ocrmypdf` is optional because it is rung 3 of a ladder whose first two rungs
   handle the large majority of documents.
 
+- Presence is not capability. `--self-test` goes further and runs the shipped PDF
+  fixture corpus through the real extraction pipeline on THIS machine, because
+  "poppler is on the PATH" and "poppler on this machine extracts a W-2 correctly"
+  are different claims. A build that renders the fixtures differently, a locale
+  that reformats numbers, a `pdftotext` too old for `-layout` as we use it — each
+  passes the presence check and fails the corpus. The repository's CI proves the
+  parsers work on the maintainer's machine; `--self-test` is how a user proves it
+  on theirs, before a real document is touched.
+
 Usage:
 
     python3 -B "$TAX_SKILL/tools/dep-check/dep_check.py"
     python3 -B "$TAX_SKILL/tools/dep-check/dep_check.py" --json
+    python3 -B "$TAX_SKILL/tools/dep-check/dep_check.py" --self-test
 
-Exit codes: 0 = every required dependency present; 1 = at least one missing.
+Exit codes: 0 = every required dependency present (and, with --self-test, the
+fixture corpus parsed correctly); 1 = at least one missing or a self-test failure.
 Optional dependencies never affect the exit code.
 """
 
@@ -56,6 +67,7 @@ INSTALL_MARKERS = (
     "dependencies.md",
     "rules/manifest.json",
     "tools/pdf-extractor/pdf_extract.py",
+    "tools/form-parser/doc_types.py",
     "evals/_deps.py",
     "evals/validate_rules.py",
     "templates",
@@ -198,8 +210,13 @@ def check_poppler() -> list[dict]:
         ),
         (
             "pdfinfo",
-            "page-count detection in pdf-extractor",
-            "the extractor cannot page-chunk large documents",
+            "page-count and producer detection in pdf-extractor",
+            "the extractor cannot page-chunk large documents or key vendor layout templates",
+        ),
+        (
+            "pdffonts",
+            "font inspection for the text-quality gate (tools/pdf-extractor/quality.py)",
+            "garbage text from fonts without a ToUnicode map is harder to detect; the gate falls back to text statistics alone",
         ),
     ):
         present = _have_command(binary)
@@ -255,6 +272,11 @@ def check_optional() -> list[dict]:
 
     for binary, package, purpose in (
         (
+            "pdftk",
+            "pdftk-java" if platform.system() == "Darwin" else "pdftk",
+            "AcroForm field reading when pypdf is absent (parsing.md rung 0)",
+        ),
+        (
             "ocrmypdf",
             "ocrmypdf",
             "OCR fallback for scanned PDFs (parsing.md rung 3)",
@@ -278,6 +300,20 @@ def check_optional() -> list[dict]:
                 "fix": "" if present else _pip_fix(package),
             }
         )
+
+    present = _have_module("pypdf")
+    results.append(
+        {
+            "name": "pypdf",
+            "kind": "package",
+            "required": False,
+            "present": present,
+            "detail": "" if present else "not importable",
+            "purpose": "exact AcroForm field values from fillable PDFs (parsing.md rung 0)",
+            "consequence": "rung 0 is skipped unless pdftk is present; vision and text rungs still work",
+            "fix": "" if present else _pip_fix("pypdf"),
+        }
+    )
 
     present = _have_module("pdfplumber")
     results.append(
@@ -335,8 +371,94 @@ def render(results: list[dict]) -> str:
         lines.append(f"    fix       : {result['fix']}")
         lines.append("")
 
+    combined = install_block(results, include_optional=False)
+    if combined:
+        lines.append("One block that fixes everything required, for the user to approve:")
+        lines.append("")
+        for cmd in combined:
+            lines.append(f"    {cmd}")
+        lines.append("")
+
     lines.append("Propose these to the user for approval. Do not run them silently,")
     lines.append("and do not proceed with work that depends on what is missing.")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def install_block(results: list[dict], *, include_optional: bool = False) -> list[str]:
+    """The deduplicated fix commands for everything missing, in install order.
+
+    Presented as one block so the user approves a single step instead of five.
+    It is still printed, never run: `dependencies.md` prohibits silent installs,
+    and some of these need sudo or a package manager the user may not want used.
+    """
+    wanted = [r for r in results if not r["present"] and r.get("fix")
+              and (r["required"] or include_optional)]
+    seen: list[str] = []
+    for r in sorted(wanted, key=lambda r: (not r["required"], r["kind"] != "binary", r["name"])):
+        if r["fix"] not in seen:
+            seen.append(r["fix"])
+    return seen
+
+
+def run_self_test() -> dict:
+    """Run the shipped fixture corpus through the real pipeline on this machine.
+
+    Presence checks prove a binary exists. This proves the chain works here: the
+    same PDFs the maintainer's CI parses are parsed again with the user's own
+    poppler build, Python and locale, and compared to checked-in golden values.
+    A failure here means real documents will be misread on this machine — the
+    one failure mode a dependency list cannot catch.
+    """
+    suites = [
+        ("form-parser fixture corpus", SKILL_ROOT / "tools/form-parser/test_form_parser.py"),
+        ("extractor and quality gate", SKILL_ROOT / "tools/pdf-extractor/test_pdf_extract.py"),
+        ("parsed-JSON invariants", SKILL_ROOT / "tools/parse-verify/test_verify.py"),
+        ("invariant registry compiles", SKILL_ROOT / "tools/form-parser/invariants.py"),
+    ]
+    out: dict = {"ran": [], "ok": True}
+    for label, script in suites:
+        if not script.is_file():
+            out["ran"].append({"suite": label, "status": "missing", "detail": f"{script.name} is not installed"})
+            out["ok"] = False
+            continue
+        try:
+            proc = subprocess.run(
+                [sys.executable, "-B", str(script)],
+                capture_output=True, text=True, timeout=300, cwd=str(SKILL_ROOT),
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            out["ran"].append({"suite": label, "status": "error", "detail": str(exc)})
+            out["ok"] = False
+            continue
+        tail = (proc.stdout or "").strip().splitlines()
+        out["ran"].append({
+            "suite": label,
+            "status": "pass" if proc.returncode == 0 else "fail",
+            "detail": "\n".join(tail[-12:]) + (("\n" + (proc.stderr or "").strip()[-800:]) if proc.returncode else ""),
+        })
+        if proc.returncode != 0:
+            out["ok"] = False
+    return out
+
+
+def render_self_test(report: dict) -> str:
+    lines = ["", "Self-test — the shipped fixture corpus, parsed on this machine", ""]
+    for entry in report["ran"]:
+        mark = {"pass": "ok  ", "fail": "FAIL", "missing": "MISS", "error": "ERR "}[entry["status"]]
+        lines.append(f"  [{mark}] {entry['suite']}")
+        if entry["status"] != "pass":
+            for line in entry["detail"].splitlines():
+                lines.append(f"         {line}")
+    lines.append("")
+    if report["ok"]:
+        lines.append("The extraction chain works on this machine: every fixture parsed to its")
+        lines.append("known-correct values. This does not vouch for any particular real document —")
+        lines.append("the vision cross-check and `parse-verify` still run on each one.")
+    else:
+        lines.append("A fixture parsed incorrectly HERE. Do not parse real tax documents until this")
+        lines.append("is resolved: the same defect will misread them silently. Report the output")
+        lines.append("above with your platform and `pdftotext -v` output.")
     lines.append("")
     return "\n".join(lines)
 
@@ -346,17 +468,45 @@ def main() -> int:
         description="Check that the tax skill is installed intact and its dependencies are present."
     )
     parser.add_argument("--json", action="store_true", help="emit machine-readable JSON")
+    parser.add_argument("--install-commands", action="store_true",
+                        help="print only the commands that fix what is missing (including optional rungs), one per line")
+    parser.add_argument("--self-test", action="store_true",
+                        help="also parse the shipped PDF fixture corpus on this machine and compare to golden values")
     args = parser.parse_args()
 
     results = collect()
     missing_required = [r for r in results if r["required"] and not r["present"]]
 
+    if args.install_commands:
+        for cmd in install_block(results, include_optional=True):
+            print(cmd)
+        return 1 if missing_required else 0
+
+    self_test = None
+    if args.self_test and not missing_required:
+        self_test = run_self_test()
+    elif args.self_test:
+        self_test = {"ran": [], "ok": False,
+                     "skipped": "required dependencies are missing; fix those first"}
+
     if args.json:
-        print(json.dumps({"skill_root": str(SKILL_ROOT), "checks": results}, indent=2))
+        payload = {"skill_root": str(SKILL_ROOT), "checks": results}
+        if self_test is not None:
+            payload["self_test"] = self_test
+        print(json.dumps(payload, indent=2))
     else:
         print(render(results))
+        if self_test is not None:
+            if self_test.get("skipped"):
+                print(f"\nSelf-test skipped: {self_test['skipped']}\n")
+            else:
+                print(render_self_test(self_test))
 
-    return 1 if missing_required else 0
+    if missing_required:
+        return 1
+    if self_test is not None and not self_test["ok"]:
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

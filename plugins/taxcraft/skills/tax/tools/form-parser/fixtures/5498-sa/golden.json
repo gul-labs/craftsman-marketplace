@@ -1,0 +1,21 @@
+{
+  "doc_type": "5498-SA",
+  "tax_year": 2025,
+  "identity": {
+    "payer_name": "Harborline Trust Company",
+    "payer_tin": "23-4567890",
+    "recipient_name": "Jordan A Rivera",
+    "recipient_tin": "123-45-6789",
+    "account_number": "HTC-1120-HSA"
+  },
+  "boxes": {
+    "box_1": 0.0,
+    "box_2": 4300.0,
+    "box_3": 0.0,
+    "box_4": 0.0,
+    "box_5": 18750.0,
+    "box_6_hsa": true,
+    "box_6_archer": false,
+    "box_6_ma_msa": false
+  }
+}

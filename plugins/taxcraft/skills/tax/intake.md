@@ -129,9 +129,10 @@ Route by doc type to the dedicated parser — do not run everything through manu
 | IRS transcript (Account / Return / Wage & Income / Record / Non-Filing) | `tools/transcript-parser/` | `python3 -B "$TAX_SKILL/tools/transcript-parser/transcript_parser.py" "<path>" [--json]` |
 | IBKR statement CSV | `tools/ibkr-parser/` | `python3 -B "$TAX_SKILL/tools/ibkr-parser/ibkr_parser.py" <statement.csv> [--pdf <statement.pdf>] [--no-confirm]` |
 | Chase bank / credit-card statement or CSV | `tools/chase-statement-parser/` | library-only — invoke via the entity's `books/transaction-ledgers/regenerate.py` driver calling `build_ledgers()` (see tool README) |
-| Everything else (W-2, 1099s, 1098, receipts, scans, letters) | `tools/pdf-extractor/` | `python3 -B "$TAX_SKILL/tools/pdf-extractor/pdf_extract.py" "<path>" [--force-image] [--pages N-M]` |
+| W-2, W-2G, 1099-INT/DIV/B/NEC/MISC/R/G/K/SA, 1099-Composite, SSA-1099, 1098, 1098-T, 1098-E, 5498, 5498-SA, 1095-A | `tools/form-parser/` | `python3 -B "$TAX_SKILL/tools/form-parser/form_parser.py" "<path>" --type <doc-type> --vision-prompt` → read the PNGs, fill the skeleton → `... --merge <vision.json> --json [--write]` (`parsing.md` rungs 0–4) |
+| Everything else (receipts, scans, letters, notices, W-9, statements without a dedicated parser) | `tools/pdf-extractor/` | `python3 -B "$TAX_SKILL/tools/pdf-extractor/pdf_extract.py" "<path>" [--mode form] [--force-image] [--pages N-M] [--json]` |
 
-Then per `parsing.md` (PDF discipline, empty-output fallback, per-doctype schemas). Never use the built-in Read tool on structured PDFs. Never silently skip a load-bearing doc.
+Then per `parsing.md` (PDF discipline, text-quality gate, vision + text merge, per-doctype schemas). Run `tools/parse-verify/verify.py` on the result before Step 4; a CRITICAL finding or a non-empty `_extraction.review_required` means the document is not final. Never use the built-in Read tool on structured PDFs. Never silently skip a load-bearing doc.
 
 ### 4. Write parsed JSON + update index
 

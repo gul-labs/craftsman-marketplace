@@ -1,0 +1,25 @@
+{
+  "doc_type": "1099-G",
+  "tax_year": 2025,
+  "identity": {
+    "payer_name": "Cascade Financial Services Inc",
+    "payer_tin": "12-3456789",
+    "recipient_name": "Jordan A Rivera",
+    "recipient_tin": "123-45-6789",
+    "account_number": "CFS-4471-0093"
+  },
+  "boxes": {
+    "box_1": 6200.0,
+    "box_2": 0.0,
+    "box_3": "2024",
+    "box_4": 620.0,
+    "box_5": 0.0,
+    "box_6": 0.0,
+    "box_7": 0.0,
+    "box_8": false,
+    "box_9": 0.0,
+    "box_10a_state": "WA",
+    "box_10b": "WA-1234",
+    "box_11": 0.0
+  }
+}

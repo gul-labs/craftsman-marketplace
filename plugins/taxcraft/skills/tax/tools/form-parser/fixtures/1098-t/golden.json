@@ -1,0 +1,21 @@
+{
+  "doc_type": "1098-T",
+  "tax_year": 2025,
+  "identity": {
+    "payer_name": "Evergreen State College",
+    "payer_tin": "91-1234567",
+    "recipient_name": "Riley Rivera",
+    "recipient_tin": "987-65-4321",
+    "account_number": "ESC-2025-4410"
+  },
+  "boxes": {
+    "box_1": 12400.0,
+    "box_4": 0.0,
+    "box_5": 3000.0,
+    "box_6": 0.0,
+    "box_7": true,
+    "box_8": true,
+    "box_9": false,
+    "box_10": 0.0
+  }
+}

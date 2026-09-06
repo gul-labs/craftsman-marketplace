@@ -1,0 +1,35 @@
+{
+  "doc_type": "1099-DIV",
+  "tax_year": 2025,
+  "identity": {
+    "payer_name": "Cascade Financial Services Inc",
+    "payer_tin": "12-3456789",
+    "recipient_name": "Jordan A Rivera",
+    "recipient_tin": "123-45-6789",
+    "account_number": "CFS-4471-0093"
+  },
+  "boxes": {
+    "box_1a": 8450.0,
+    "box_1b": 6900.0,
+    "box_2a": 2100.0,
+    "box_2b": 300.0,
+    "box_2c": 0.0,
+    "box_2d": 150.0,
+    "box_2e": 200.0,
+    "box_2f": 100.0,
+    "box_3": 75.0,
+    "box_4": 0.0,
+    "box_5": 900.0,
+    "box_6": 0.0,
+    "box_7": 210.0,
+    "box_8": "Various",
+    "box_9": 0.0,
+    "box_10": 0.0,
+    "box_11": false,
+    "box_12": 1400.0,
+    "box_13": 250.0,
+    "box_14_state": "WA",
+    "box_15": "WA-5678",
+    "box_16": 0.0
+  }
+}

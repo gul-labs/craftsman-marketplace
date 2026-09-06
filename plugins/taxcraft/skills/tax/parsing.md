@@ -8,14 +8,14 @@ Never parse, cache, or summarize any file under a path containing `privileged` (
 
 ## PDF read discipline (NEVER violate)
 
-**Never use the built-in `Read` tool directly on structured PDFs** (K-1s, 1099s, W-9s, tax forms, Schedule L, etc.). It strips layout and silently misreads columns.
+**Never use the built-in `Read` tool directly on structured PDFs** (K-1s, 1099s, W-2s, 1098s, tax forms, Schedule L, etc.). It strips layout and silently misreads columns.
 
 ### Prerequisite
 
-This chain requires **poppler** (`pdftotext`, `pdftoppm`). Everything else below is optional and probed at the moment it is needed.
+This chain requires **poppler** (`pdftotext`, `pdftoppm`, `pdfinfo`, `pdffonts`). Everything else below is optional and probed at the moment it is needed.
 
 ```bash
-command -v pdftotext pdftoppm    # both must resolve
+command -v pdftotext pdftoppm pdfinfo    # all must resolve
 ```
 
 If poppler is missing, say so and stop — do not fall back to `Read`-on-PDF. The
@@ -23,43 +23,97 @@ per-platform install commands and the propose-don't-install rule live in
 `dependencies.md`; the session-level preflight that catches this before an intake
 starts is `tools/dep-check/dep_check.py`.
 
+### Two kinds of document, two primary reads
+
+| Shape | Examples | Primary read | Cross-check |
+|---|---|---|---|
+| **Form** — boxes with printed labels | W-2, W-2G, 1099-*, 1098-*, 1095-A, 5498*, SSA-1099, K-1 | **vision** over the rasterized page (rung 1) | layout text (rung 2) |
+| **Prose / table** — running text or ledger rows | filed returns, IRS letters and transcripts, bank and brokerage statements | layout text (rung 2) | vision only when the quality gate says so |
+
+Layout text scrambles form columns: a value hops to the neighbouring box and the
+number is still a perfectly plausible number. Vision reads the box the value sits in.
+That is why forms are read by vision first and text second, and why the two are
+**merged**, not chosen between.
+
 ### The fallback ladder (always try in this order)
 
 | # | Rung | Gate |
 |---|---|---|
-| 1 | `pdftotext -layout` → use the text | core |
-| 2 | Rasterize to PNG → `Read` the image (vision) | core |
-| 3 | `ocrmypdf` → re-run rung 1 | `command -v ocrmypdf` |
-| 4 | `pdfplumber` table extraction | `python3 -c 'import pdfplumber'` |
-| 5 | Locally-configured OCR command | see "Machine-local tools" below |
-| 6 | Ask the user; log to `open-questions.md` | core |
+| 0 | AcroForm field values (fillable PDFs) — exact, no extraction | `pypdf` or `pdftk`, probed |
+| 1 | Rasterize → `Read` the PNGs (vision), fill the doc type's JSON skeleton | core |
+| 2 | `pdftotext -layout` → **text-quality gate** → anchor parse | core |
+| 3 | Merge rungs 1 + 2 field by field; disagreements go to `review_required` | core |
+| 4 | Layer B invariants (`tools/parse-verify/verify.py`) — CRITICAL blocks the write unless explicitly overridden | core |
+| 5 | `ocrmypdf` → re-run rung 2 | `command -v ocrmypdf` |
+| 6 | `pdfplumber` table extraction | `python3 -c 'import pdfplumber'` |
+| 7 | Machine-local or hosted extractor (see below) | `.claude/tax-pdf-tools.local.md` |
+| 8 | Ask the user; log to `open-questions.md` | core |
 
-Stop at the first rung that yields trustworthy output. **Do not skip ahead to rungs 3–5 because a document "looks scanned"** — rung 2 resolves the large majority of scanned tax forms, and it reads layout directly rather than reconstructing it from OCR'd text, which is why it outranks every OCR-based rung for form-shaped documents.
+Rungs 0–4 are one workflow, run by `tools/form-parser/` for every registry doc type
+and by `tools/k1-parser/` for K-1s. Rungs 5–7 are reached only when rung 2 yields
+nothing usable **and** rung 1 was unreadable. Probe a gate only when you reach that
+rung; there is no upfront capability scan.
 
-Probe a gate only when you actually reach that rung. There is no upfront capability scan.
+**The text-quality gate** (`tools/pdf-extractor/quality.py`) replaces the old
+"more than 50 characters" check. It scores printable ratio, `(cid:N)` tokens,
+dictionary hit ratio and, via `pdffonts`, fonts with no ToUnicode map — the
+signature of a PDF whose text layer is symbol soup. Verdicts: `ok` (parse),
+`suspect` (parse, but the vision pass is mandatory), `garbage` (do not parse the
+text at all; vision is the only read). A parse that skipped the gate is not a parse.
 
-**Rung 1 — text extraction:**
+**Rung 0 — AcroForm fields** (IRS fillable forms, some payroll and broker PDFs):
 ```bash
-pdftotext -layout "<path>.pdf" -
+python3 -B "$TAX_SKILL/tools/pdf-extractor/acroform.py" "<path>.pdf" --json
 ```
-If this returns meaningful content (not empty, not just metadata), use it.
+When fields exist, their values are the document — no digits were ever "read".
+`form-parser` uses them automatically and records `engines: ["acroform"]`.
 
-**Rung 2 — rasterize and read:**
+**Rung 1 — vision, the primary read for forms:**
 ```bash
-# All pages, straight to PNG (add -f N -l M for a page range)
-pdftoppm -png -r 200 "<path>.pdf" /tmp/<prefix>
-# Then: Read each /tmp/<prefix>-*.png via the Read tool
+python3 -B "$TAX_SKILL/tools/form-parser/form_parser.py" "<path>.pdf" --type W-2 --vision-prompt
+```
+This rasterizes the pages, prints their PNG paths, and prints the exact JSON
+skeleton for that form with every box named. `Read` each PNG and fill the skeleton
+**as printed**: copy digits exactly, `null` for a blank box, `0` only when the form
+prints 0, never infer. Save it as `<stem>.vision.json` in a temp location.
+
+**Rung 2 + 3 — text pass and merge:**
+```bash
+python3 -B "$TAX_SKILL/tools/form-parser/form_parser.py" "<path>.pdf" --type W-2 --merge "<stem>.vision.json" --json
+```
+The text pass runs behind the quality gate, both reads are merged per field, the
+registry invariants run, and the result carries `_extraction.review_required` — the
+boxes where the two reads disagree. **Every path in `review_required` is checked by
+eye against the PNG before the JSON is written to `.parsed/`.** Add `--write` once
+that is done; it refuses to write a document with a CRITICAL finding. `--force`
+overrides that refusal and is the only way past it — it stamps the override, the
+date, and every overridden invariant into the written JSON, so a forced write is
+visible to whoever reads the workpaper next. Record the reason in
+`open-questions.md` at the same time.
+
+Doc types the form parser knows (`tools/form-parser/doc_types.py`): W-2, W-2G,
+1099-INT, 1099-DIV, 1099-B (summary), 1099-Composite, 1099-NEC, 1099-MISC, 1099-R,
+1099-G, 1099-K, 1099-SA, SSA-1099, 1098, 1098-T, 1098-E, 5498, 5498-SA, 1095-A.
+K-1s route to `tools/k1-parser/` (same vision + `--merge` workflow), filed returns
+to `tools/return-parser/`, transcripts to `tools/transcript-parser/`. A document
+type not in the registry is parsed by the generic extractor below and its schema
+is defined on first encounter (see "Other types").
+
+**Generic extractor** (prose documents, or anything not in the registry):
+```bash
+python3 -B "$TAX_SKILL/tools/pdf-extractor/pdf_extract.py" "<path>.pdf" --json          # text when the gate passes, else PNG paths
+python3 -B "$TAX_SKILL/tools/pdf-extractor/pdf_extract.py" "<path>.pdf" --mode form     # always both: PNGs + gated text
 ```
 
-**The Read-tool-on-image path is acceptable and reliable** for scanned PDFs, IRS letters, check images, and any document where pdftotext returns nothing. The prohibition is specifically against Read-on-PDF for STRUCTURED tax forms where `pdftotext -layout` would give a better result.
+**The Read-tool-on-image path is acceptable and reliable** for scanned PDFs, IRS letters, check images, and any document where the gate fails. The prohibition is specifically against Read-on-PDF.
 
-**Rung 3 — OCR a scanned PDF in place**, only if rung 2 was unreadable:
+**Rung 5 — OCR a scanned PDF in place**, only if the vision pass was unreadable (very low resolution, skew):
 ```bash
 command -v ocrmypdf && ocrmypdf --skip-text "<path>.pdf" /tmp/<name>-ocr.pdf \
   && pdftotext -layout /tmp/<name>-ocr.pdf -
 ```
 
-**Rung 4 — stubborn table grids** where the values are legible but columns won't align:
+**Rung 6 — stubborn table grids** where the values are legible but columns won't align:
 ```bash
 python3 -c 'import pdfplumber' 2>/dev/null && python3 - <<'PY'
 import pdfplumber
@@ -70,13 +124,30 @@ with pdfplumber.open("<path>.pdf") as pdf:
 PY
 ```
 
-**Helper utility**: see `tools/pdf-extractor/` in this skill for a wrapper that runs rungs 1–2 automatically and returns either extracted text or a list of PNG paths ready for Read.
+### Vendor layouts (K-1s and returns)
 
-### Machine-local tools (rung 5)
+Preparer packages (Lacerte, ProSeries, UltraTax, Drake, CCH, TurboTax Business)
+each print the same form with different text geometry. `pdfinfo` reports the
+producer; the parsers record it under `_extraction.producer` / `_extraction.vendor`
+and `tools/form-parser/templates/` can overlay per-vendor label patterns keyed on
+it. A vendor the skill has no template for is not an error — it means the vision
+read carries more weight and the K-1 fields named under "Verify before writing"
+are confirmed individually.
 
-Some machines have a licensed desktop OCR application or a local OCR model that is better than rungs 3–4 but cannot be assumed to exist. If `.claude/tax-pdf-tools.local.md` is present at the workspace root, read it and follow the commands it defines; if it is absent, skip rung 5 entirely.
+### Machine-local and hosted extractors (rung 7)
 
-That file is **machine-specific and is not part of this skill** — never move its contents into this directory, and never hardcode an application path, license detail, or OS-specific automation here.
+Some machines have a licensed desktop OCR application, a local OCR model, or an
+account with a hosted document-AI service (the prebuilt W-2 / 1099 / 1040 models
+offered by the major cloud providers) that is better than rungs 5–6 but cannot be
+assumed to exist. If `.claude/tax-pdf-tools.local.md` is present at the workspace
+root, read it and follow the commands it defines; if it is absent, skip rung 7
+entirely.
+
+That file is **machine-specific and is not part of this skill** — never move its
+contents into this directory, and never hardcode an application path, license
+detail, API key, or OS-specific automation here. A hosted service means the
+document leaves the machine: say so before the first call in a session, and never
+send a file from a path containing `privileged` (see "Privilege Exclusion").
 
 A fully-local extractor does **not** create an exception to "Privilege Exclusion (STRICT)" above. It only changes *which tool* may be used once the user has explicitly authorized work inside a privileged matter.
 
@@ -96,7 +167,7 @@ every extractor would reproduce identically, including the issuer's own.
 
 | Layer | Question it answers | Tool |
 |---|---|---|
-| A — differential extraction | Did we *read* it correctly? | `tools/pdf-extractor/compare.py` |
+| A — differential extraction | Did we *read* it correctly? | the vision + text merge (`form_parser.py --merge`, `k1_parser.py --merge`); `tools/pdf-extractor/compare.py` for raw text engines and `compare.py --fields` for two parsed JSONs |
 | B — invariants | Can this document be internally consistent *at all*? | `tools/parse-verify/verify.py` |
 
 **Layer A** runs the PDF through independent extractors and reports only the figures they
@@ -113,8 +184,13 @@ number, every engine reproduces it faithfully and they all agree.
 **Layer B** runs after the doc is normalized into `.parsed/`, and tests arithmetic and tax-law
 invariants that hold regardless of who did the reading — capital-account rollforward under either
 sign convention, §704(d) loss-vs-basis, outside basis against capital + liability share (§722/§752),
-Schedule L balance, M-2 rollforward and its tie to Schedule L, and cross-document footing of every
-issued K-1 to Schedule K:
+Schedule L balance, M-2 rollforward and its tie to Schedule L, cross-document footing of every
+issued K-1 to Schedule K, and for every form-parser doc type the invariants declared in
+`tools/form-parser/doc_types.py` (W-2 box 4 = 6.2% of box 3 + 7 and under the year's wage base,
+box 6 within the Medicare band, 1099-DIV 1b ≤ 1a, 1099-R 2a ≤ 1, SSA-1099 box 5 = 3 − 4,
+1099-K months sum to 1a, 1095-A annual totals tie, and so on). An invariant whose input box
+was not observed is reported as `not_evaluable` at INFO — it is **not proven**, and it is never
+satisfied by treating the missing box as zero:
 
 ```bash
 python3 -B "$TAX_SKILL/tools/parse-verify/verify.py" <scope>/FY<YYYY>/.parsed/    # exit 1 if findings
@@ -208,24 +284,42 @@ New or upgraded parser schemas use this field envelope for load-bearing values:
 }
 ```
 
-Until the parser tools emit and validate that contract directly, a computation
-can at most be provisional unless every used legacy field is independently
-verified. See `close-estimate.md` for downstream status precedence.
+`tools/form-parser/` emits this contract directly (`schema_version: 2`) for every
+registry doc type, and `tools/k1-parser/ --merge` emits it for K-1s. The document
+shape is `{"doc_type", "schema_version": 2, "tax_year", "identity": {<box>: <envelope>},
+"boxes": {<box>: <envelope>}, "_extraction": {engines, producer, quality, sha256,
+review_required, findings}}`; box ids mirror the printed box numbers (`box_1`,
+`box_2a`, `box_12` as a codes list) and are declared once in
+`tools/form-parser/doc_types.py`. `_extraction.review_required` lists the paths where
+the text and vision reads disagreed; a document with a non-empty list is not final
+until each path is confirmed against the page and the envelope's `review` block
+records who did it.
 
-### W-2
+Legacy flat documents (no `schema_version`) remain `LEGACY_UNVERIFIED`: a
+computation over them can at most be provisional unless every used field is
+independently verified. See `close-estimate.md` for downstream status precedence.
+
+### W-2 and every other form-parser type (schema 2)
+
+The registry is the schema. `python3 -B "$TAX_SKILL/tools/form-parser/doc_types.py"`
+lists every type with its box count; `form_parser.py --type W-2 --vision-prompt`
+prints the exact skeleton. Abbreviated W-2 for orientation (every value is an
+envelope in the real file):
 
 ```json
 {
-  "doc_type": "W-2", "tax_year": 2025,
-  "employee": "<name>", "employer": "<name>", "ein": "XX-XXXXXXX",
-  "box_1_wages": 0, "box_2_fed_wh": 0,
-  "box_3_ss_wages": 0, "box_4_ss_tax": 0,
-  "box_5_medicare_wages": 0, "box_6_medicare_tax": 0,
-  "box_12": [{"code": "D", "amount": 0}],
-  "box_14": [],
-  "state_wages": [{"state": "XX", "wages": 0, "wh": 0}]
+  "doc_type": "W-2", "schema_version": 2, "tax_year": 2025,
+  "identity": {"employee_ssn": "<env>", "employer_ein": "<env>", "employer_name": "<env>", "employee_name": "<env>"},
+  "boxes": {"box_1": "<env>", "box_2": "<env>", "box_3": "<env>", "box_4": "<env>", "box_5": "<env>", "box_6": "<env>",
+            "box_12": {"value": [{"code": "D", "amount": 0}], "state": "OBSERVED_VALUE"},
+            "box_15_state": "<env>", "box_16": "<env>", "box_17": "<env>"},
+  "_extraction": {"engines": ["text", "vision"], "review_required": [], "findings": []}
 }
 ```
+
+Legacy W-2 files written before 0.3.0 use the flat shape
+(`box_1_wages`, `box_2_fed_wh`, `state_wages[]`) and stay readable; they are
+`LEGACY_UNVERIFIED` until re-parsed.
 
 ### K-1 (1065)
 
@@ -358,7 +452,7 @@ When parsing a previously-filed return PDF (e.g., `<year> <entity> Form 1065 ...
 
 ### Other types
 
-Define compact schemas on first encounter for: 1098, 1099-INT standalone, 1099-R, 5498, 5498-SA, 1095-A, SSA-1099, Schedule K-1 (1041), 1099-NEC, 1099-MISC, W-9, IRS account transcript, IRS wage-and-income transcript. Mirror box/line numbers 1:1.
+1098, 1098-T, 1098-E, 1099-INT, 1099-DIV, 1099-B, 1099-NEC, 1099-MISC, 1099-R, 1099-G, 1099-K, 1099-SA, 5498, 5498-SA, 1095-A, SSA-1099 and W-2G are registry types — their schema is `tools/form-parser/doc_types.py`, never an ad-hoc JSON. Define compact schemas on first encounter only for what the registry does not cover (W-9, 1095-B/C, Schedule K-1 (1041) beyond the k1-parser fields, county assessments), mirroring box/line numbers 1:1, and add the type to the registry when it recurs.
 
 ## Name-level verification (on every parse)
 

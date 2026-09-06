@@ -25,6 +25,151 @@ not a synonym for "public."
 
 Nothing yet.
 
+## [0.8.0] (2026-09-06)
+
+Marketplace `0.8.0`; `taxcraft` moves to `0.3.0`; `craftsman` is unchanged at
+`0.5.0`. This release answers the most consistent piece of user feedback on the
+tax skill: PDF extraction of W-2s, K-1s, 1099s and 1098s was unreliable. MINOR
+because a new shipped tool (`tools/form-parser/`) and new files under
+`tools/pdf-extractor/` land; nothing is removed and legacy parsed JSON stays
+readable.
+
+### Why it was unreliable
+
+- W-2s, 1099s and 1098s had **no parser at all**. They went through the generic
+  extractor and were read freehand from `pdftotext -layout` output.
+- The K-1 and return parsers are regexes tuned on one preparer's layout; a K-1
+  from a different package silently returned zeros.
+- Text was tried before vision even though `parsing.md` itself warned that
+  layout text scrambles form columns.
+- The "is this real text" gate was *more than 50 characters*. A PDF whose fonts
+  carry no ToUnicode map produces long, dense symbol soup that passed it, so the
+  image fallback never fired and the regexes returned nothing — quietly.
+- There was no PDF fixture corpus, so none of this could regress.
+
+### Added — `tools/form-parser/`
+
+- **A declarative registry** (`doc_types.py`) of nineteen information returns —
+  W-2, W-2G, 1099-INT, -DIV, -B (summary), -Composite, -NEC, -MISC, -R, -G, -K,
+  -SA, SSA-1099, 1098, 1098-T, 1098-E, 5498, 5498-SA, 1095-A — each with its
+  boxes (id, label, kind, label regex), anchor phrases for detection, and the
+  arithmetic and tax-law **invariants** an internally consistent copy must
+  satisfy: W-2 box 4 = 6.2% of boxes 3 + 7 and under the year's wage base (read
+  from `rules/federal-<year>.json`), box 6 inside the Medicare band, 1099-DIV
+  1b ≤ 1a, 1099-R 2a ≤ 1 and box 7 present, SSA-1099 box 5 = 3 − 4, 1099-K
+  months sum to 1a, 1095-A annual totals tie and APTC ≤ premium each month, and
+  seventy-one more. Adding a form is adding a registry entry.
+- **`form_parser.py`** runs the new ladder end to end: AcroForm field values
+  when the PDF has them (exact, nothing "read"), a vision skeleton the model
+  fills from the rasterized pages (`--vision-prompt`), a text pass behind the
+  quality gate, a per-field **merge** of the two reads (`--merge`) that lists
+  every disagreement under `_extraction.review_required`, and the invariants.
+  It emits the field envelope `parsing.md` promised in 0.2.0 (`schema_version:
+  2`: value, state, source anchor, confidence, review) and refuses `--write` on
+  a CRITICAL finding. A box the extractor did not observe is `NOT_PRESENT`,
+  never 0.
+- **A fixture corpus** (`fixtures/`): a deterministic pure-Python PDF writer
+  produces a text PDF and golden JSON for every registry type, plus a fillable
+  (AcroForm) W-2, a scanned W-2, a garbage-text W-2 and a deliberately wrong
+  W-2, and `test_form_parser.py` proves the text pass reads every golden value,
+  the gate rejects the garbage, the scan yields a vision prompt, and the wrong
+  W-2 trips its invariant. `tools/form-parser/templates/` holds
+  producer-keyed label overrides for vendor layouts.
+
+### Changed — `tools/pdf-extractor/`
+
+- **Text-quality gate** (`quality.py`): printable ratio, `(cid:N)` share,
+  dictionary hit ratio, and `pdffonts` ToUnicode inspection yield `ok`,
+  `suspect` (vision pass mandatory) or `garbage` (text discarded). Also detects
+  the doc type from anchor phrases.
+- **`envelope.py`**: the field envelope and the merge policy — both engines
+  agree → 0.95 confidence, one-sided → 0.6, disagree → 0.3 with the alternate
+  recorded and the path flagged for review.
+- **`acroform.py`** (rung 0) via `pypdf` or `pdftk`, both optional.
+- `pdf_extract.py` records producer/creator, page count, AcroForm fields and the
+  quality report; `--mode form` returns PNGs *and* gated text; `--json`.
+- `compare.py --fields a.json b.json` diffs two parsed documents box by box.
+
+### Changed — `tools/k1-parser/`, `tools/parse-verify/`
+
+- The K-1 parser no longer raises on an image-only or garbage-text PDF; it
+  returns the PNG paths and a vision prompt, accepts `--merge`, and records the
+  preparer package from the PDF producer with a per-vendor warning naming the
+  boxes to confirm individually (1, 2, 4a/4c, 19, Item K, Item L).
+- `verify.py` unwraps envelopes everywhere, routes every registry type through
+  the declarative invariants, reports an invariant whose inputs were not
+  observed as `not_evaluable` (INFO) instead of passing it on a phantom zero,
+  and surfaces `review_required` paths as MEDIUM findings.
+
+### Fixed — defects an adversarial review caught before release
+
+Three independent review passes (tax-law correctness of the invariants,
+silent-wrong-value paths, doc-versus-code consistency) each returned BLOCK. What
+they found, all fixed here:
+
+- **The merge tolerance was a percentage.** At 0.5%, a text read of `58,192` and
+  a vision read of `58,483` differed by $291 and were recorded as *agreement* at
+  0.95 confidence, never reaching the review list. Two engines reading the same
+  printed number must produce the same digits; the tolerance is now half a cent,
+  which covers rendering only.
+- **An unread box-12 amount compared equal to a printed zero.** `null` and `0`
+  are "we could not read it" and "the employer printed zero"; merging them at
+  high confidence erased the difference.
+- **Unobserved inputs could satisfy an invariant silently.** An absent code list
+  summed to zero, a total skipped its unreadable members, and a guard that
+  closed because a box was never observed reported nothing at all — which reads
+  as "checked, fine". Aggregates now refuse to evaluate over an unreadable box,
+  a blank box on a preprinted return still contributes zero, and a guard that
+  closes for want of data says so as `not_evaluable`.
+- **A text-only read of a form looked final.** A PDF whose text layer carries a
+  plausible but wrong character mapping passes every text statistic while
+  reporting numbers that were never printed. A single-engine form parse is now
+  marked `vision_required`, carries a warning into the written document, and
+  exits non-zero.
+- **Six invariants would have fired on correctly issued forms.** W-2 boxes 4 and
+  6 are the tax actually *collected*, so uncollected tax on tips or group-term
+  life legitimately falls below the statutory rate. Both are now bounded on each
+  side, with the shortfall allowed only up to the uncollected tax the employer
+  reports in box 12 (code A or M for social security, B or N for Medicare) —
+  a bare upper bound would have let a box 4 read as $2,000 where $3,100 was
+  printed pass in silence. The box 1 versus box 5 deferral rule is gone
+  entirely: FICA-exempt wages break it. 1099-R box 5 may exceed box 1; 1098
+  box 4 refunds a prior year's interest; a 1095-A month can carry advance credit
+  with a zero premium when coverage was terminated for nonpayment. The 1099-B
+  gain tie now limits the market-discount adjustment to the realized gain, as
+  Form 8949 does.
+- **A missing check for the costly 1099-K misread**: box 4 backup withholding
+  above box 1a gross is the classic transposition, now HIGH.
+- **The Medicare lower bound omitted the additional tax.** A $250,000 W-2 must
+  withhold 1.45% plus 0.9% above $200,000. Checking only 1.45% let a box 6 of
+  $3,650 stand where $4,075 was withheld, $425 short, in silence.
+- **Malformed tokens were salvaged into numbers.** Stripping every `$` and `,`
+  before parsing turned `$1$2` and `1,2` into 12 — a fabricated figure that
+  compares equal to a real one, which is worse than an unreadable box. Amounts
+  are now matched against an anchored pattern, so an EIN, a phone number or a
+  mangled token is compared as text.
+- **Accounting negatives were read as disagreements.** `(500)` and `-500` are
+  the same amount; comparing them as strings put clean reads on the review list,
+  and a review list full of false alarms is one nobody reads.
+- **`--force` silently bypassed the CRITICAL write block** the docs promised.
+  It still overrides, because that is sometimes the right call, but it now
+  stamps the override, its date, and every overridden invariant into the written
+  JSON, so a forced write cannot be mistaken for a clean one.
+
+### Changed — method and preflight
+
+- `parsing.md` "PDF read discipline" is rewritten around the new ladder: forms
+  are read by vision first and cross-checked by gated text; AcroForm is rung 0;
+  merge and invariants are rungs 3–4; hosted document-AI services are an
+  explicit rung 7 behind the machine-local file, with the "the document leaves
+  the machine" disclosure. `intake.md` routes every registry type to
+  `form-parser`.
+- `dep-check` probes `pdffonts`, `pypdf` and `pdftk`, and gains `--self-test`,
+  which runs the fixture corpus on the user's machine so "does the pipeline work
+  here, with this poppler build" is answered before a real document is touched.
+- CI installs poppler and runs the fixture tests, so a parser change that breaks
+  a form fails the PR instead of reaching users.
+
 ## [0.7.0] (2026-09-04)
 
 Marketplace `0.7.0`; `taxcraft` moves to `0.2.0`; `craftsman` is unchanged at

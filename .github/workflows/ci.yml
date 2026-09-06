@@ -38,6 +38,11 @@ jobs:
       # invoked and nothing reaches the network, so this job costs runner minutes only.
       # The whole suite runs in ~3s. jsonschema and markdown-it-py are the only
       # third-party imports, and only evals/ uses them - tools/ stays stdlib-only.
+      # The PDF fixture tests under tools/form-parser and tools/pdf-extractor need
+      # poppler (pdftotext/pdftoppm/pdfinfo/pdffonts). Without it they SKIP, and a
+      # skipped fixture corpus is not a gate, so install it here.
+      - name: Install poppler
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils
       - name: Install eval dependencies
         run: pip install --disable-pip-version-check jsonschema markdown-it-py
       - name: Run taxcraft evals
@@ -65,6 +70,9 @@ jobs:
             evals/validate_rules.py \
             evals/validate_stock_issuance.py \
             tools/parse-verify/test_verify.py \
+            tools/pdf-extractor/test_pdf_extract.py \
+            tools/form-parser/test_form_parser.py \
+            tools/form-parser/invariants.py \
           ; do
             echo "--- $f"
             if ! python3 -B "$f"; then
