@@ -124,6 +124,28 @@ with pdfplumber.open("<path>.pdf") as pdf:
 PY
 ```
 
+### Positional fields are the failure mode, and a passing text gate does not clear them
+
+Every misread this discipline has caught on a K-1 has been a **checkbox or positional field** —
+Item J percentages dropped, Box G / Item M ticks landing on the wrong word, Item K/L cells
+scrambled — on a PDF whose text-quality gate scored `ok`, because the dollar boxes read fine and
+the scrambling was in the layout, not the encoding. The rule that follows from it: **any field
+that decides a filing position (Item J, G, H, K, L, M, N; every checkbox) is confirmed from the
+rasterized page, and the page number is cited in the workpaper**, regardless of the gate verdict.
+Dollar amounts in numbered boxes may be taken from the merged read when the two rungs agree.
+
+### Two versions of one document
+
+`pdfinfo` creation date and producer, and the "Amended K-1" box, are read on every K-1. When two
+files carry the same tax year and partner with different figures and *neither* is marked amended,
+**neither is controlling until the issuer or its preparer says which in writing, a corrected or
+amended K-1 arrives, or a filing-position hold is documented** — PDF metadata is mutable and may
+reflect a reprint, export, or scan rather than the issuer's final return, so it is corroboration
+at most. Keep both copies, log in the workpaper exactly which fields differ, note any internal
+evidence (e.g., which copy rolls to the next year's Item L opening), and raise the question with
+the issuer before relying on either. Name the copy you are not relying on `-SUPERSEDED` only once
+the question is settled, and never quote a figure from it without saying so.
+
 ### Vendor layouts (K-1s and returns)
 
 Preparer packages (Lacerte, ProSeries, UltraTax, Drake, CCH, TurboTax Business)

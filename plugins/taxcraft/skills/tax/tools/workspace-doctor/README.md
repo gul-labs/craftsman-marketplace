@@ -43,12 +43,13 @@ python3 -B "$TAX_SKILL/tools/workspace-doctor/doctor.py" --root /path/to/workspa
 | Beancount ledgers failing bean-check | Each `entities/**/books/ledger.beancount` run through `bean-check` (books venv) |
 | xledger-check (intercompany mirrors) | `books-tooling/scripts/xledger-check.py` — `#intercompany` links must have two legs netting to zero |
 | Ledgers older than latest bank/CSV export | `ledger.beancount` mtime vs newest `tax/FY*/source/bank-cc` CSV |
+| Entity trackers missing | `entities/<slug>/carryforwards.json` absent for any entity with a `books/` dir; `books/capital-accounts.md` absent for an entity whose `entity.md` `Entity type:` field says partnership; an `entity.md` with no readable `Entity type:` field is reported as unclassifiable. **This is the one check that reads file content** — it scans `entity.md` line by line only until it finds the labelled `Entity type:` field (or reaches end of file), reads no other file, and uses the value only to classify; the value is never printed. A §704(d) carryforward, EBIE allocation, or passed-through credit that lives only in prose is not tracked — see `entities/partnership.md` § 1065 Flow item 4. Fixture tests: `python3 -B test_doctor.py` |
 
 Each group caps output at 20 paths, appending `…and N more` beyond that.
 
 ## What it does NOT do
 
-- Does not read file contents (PII-safe by construction)
+- Does not read file contents, with one documented exception: the entity-tracker check scans each `entities/<slug>/entity.md` line by line until it finds the labelled `Entity type:` field (or end of file) and uses that value only to classify the entity — the value is never printed and no other file is opened. No document, ledger, or return content is read (PII-safe by construction)
 - Does not modify, move, rename, or delete anything
 - Does not compute or validate tax figures
 - Is not a substitute for the tax skill's own routing / intake checks — it

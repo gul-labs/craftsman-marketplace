@@ -73,6 +73,7 @@ jobs:
             tools/pdf-extractor/test_pdf_extract.py \
             tools/form-parser/test_form_parser.py \
             tools/form-parser/invariants.py \
+            tools/workspace-doctor/test_doctor.py \
           ; do
             echo "--- $f"
             if ! python3 -B "$f"; then
