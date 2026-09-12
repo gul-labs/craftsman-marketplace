@@ -28,6 +28,9 @@ Our folder structure maps directly:
 - Current file → `entities/<slug>/tax/FY<YYYY>/`
 
 This is the standard lens a CPA or auditor will bring when reviewing the workspace.
+The same split governs prose: operative files state the current answer, decision memos
+under `decisions/` are the frozen record, and a changed conclusion is a new memo rather than
+an edit — `supersession.md`.
 
 ## Folder-to-concept mapping (entity scope)
 

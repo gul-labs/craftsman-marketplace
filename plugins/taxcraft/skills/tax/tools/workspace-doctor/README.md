@@ -4,8 +4,11 @@ Report-only health check for the tax workspace layout. **Never modifies or
 deletes anything** — it only reads directory structure and filenames, and
 always exits `0` (this is a diagnostic report, not a CI gate).
 
-Prints paths only, never file contents — no PII from inside documents is
-ever read or shown, and any path with a segment containing `privileged`
+Prints paths only, never file contents. Three checks read bounded slices of
+Markdown — the `Entity type:` line of `entity.md`, operative Markdown matched
+against a fixed pattern list, and decision-memo header lines — and none of
+what they read is ever printed; findings are a path plus a rule name. No
+document, ledger, or return content is read. Any path with a segment containing `privileged`
 (case-insensitive, e.g. `*attorney-client-privileged*`) is excluded by
 design from every walk and never appears in output. That said, the output
 still contains file/folder names, which may themselves be sensitive (entity
@@ -43,13 +46,15 @@ python3 -B "$TAX_SKILL/tools/workspace-doctor/doctor.py" --root /path/to/workspa
 | Beancount ledgers failing bean-check | Each `entities/**/books/ledger.beancount` run through `bean-check` (books venv) |
 | xledger-check (intercompany mirrors) | `books-tooling/scripts/xledger-check.py` — `#intercompany` links must have two legs netting to zero |
 | Ledgers older than latest bank/CSV export | `ledger.beancount` mtime vs newest `tax/FY*/source/bank-cc` CSV |
-| Entity trackers missing | `entities/<slug>/carryforwards.json` absent for any entity with a `books/` dir; `books/capital-accounts.md` absent for an entity whose `entity.md` `Entity type:` field says partnership; an `entity.md` with no readable `Entity type:` field is reported as unclassifiable. **This is the one check that reads file content** — it scans `entity.md` line by line only until it finds the labelled `Entity type:` field (or reaches end of file), reads no other file, and uses the value only to classify; the value is never printed. A §704(d) carryforward, EBIE allocation, or passed-through credit that lives only in prose is not tracked — see `entities/partnership.md` § 1065 Flow item 4. Fixture tests: `python3 -B test_doctor.py` |
+| In-place prose history in operative files | Operative Markdown under `workspace-profile/`, `individual/`, `entities/` carrying superseded content in the reading path — `§0a`-style update-block headings, `Update`/`Revised` headings, dated `Update (YYYY-MM-DD)` headings, History / Change log / Prior analysis / Superseded sections, `~~strikethrough~~`, and "kept/retained/preserved for the audit trail". Fenced code is ignored. Out of scope: `decisions/`, `notes/`, records and evidence folders (`.computed/`, `.parsed/`, `filed/`, `source/`, `records/`, `corporate/`, `books/`, `accounts/`, …), and the row-based trackers and logs `history.md`, `open-questions.md`, `pending-docs.md`, `cross-entity-followup-log.md`, `open-items-tracker.md`. Reads each file line by line; prints the path and the rule name(s), never the line. Rule: `supersession.md` §2 and §8 |
+| Decision-memo lineage | Every `**/decisions/*.md` carries a `Memo ID`, a `Supersedes` line, and a `Superseded by` line (empty until a later memo fills it); IDs are unique across the workspace; a memo named in another's `Supersedes` exists in the same folder and carries the reciprocal `Superseded by` (and vice versa). Reads only the labelled header lines above the first `## ` heading; IDs are never printed. Rule: `supersession.md` §4–§5 |
+| Entity trackers missing | `entities/<slug>/carryforwards.json` absent for any entity with a `books/` dir; `books/capital-accounts.md` absent for an entity whose `entity.md` `Entity type:` field says partnership; an `entity.md` with no readable `Entity type:` field is reported as unclassifiable. Reads file content — it scans `entity.md` line by line only until it finds the labelled `Entity type:` field (or reaches end of file), reads no other file, and uses the value only to classify; the value is never printed. A §704(d) carryforward, EBIE allocation, or passed-through credit that lives only in prose is not tracked — see `entities/partnership.md` § 1065 Flow item 4. Fixture tests: `python3 -B test_doctor.py` |
 
 Each group caps output at 20 paths, appending `…and N more` beyond that.
 
 ## What it does NOT do
 
-- Does not read file contents, with one documented exception: the entity-tracker check scans each `entities/<slug>/entity.md` line by line until it finds the labelled `Entity type:` field (or end of file) and uses that value only to classify the entity — the value is never printed and no other file is opened. No document, ledger, or return content is read (PII-safe by construction)
+- Does not print file contents. Three checks read bounded slices: the entity-tracker check scans `entity.md` until the labelled `Entity type:` field; the prose-history check matches operative Markdown lines against a fixed pattern list; the memo-lineage check reads decision-memo header lines. Each emits a path plus a rule name and never the text it read. No document, ledger, or return content is read (PII-safe by construction)
 - Does not modify, move, rename, or delete anything
 - Does not compute or validate tax figures
 - Is not a substitute for the tax skill's own routing / intake checks — it

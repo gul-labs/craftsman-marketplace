@@ -11,17 +11,20 @@ This folder uses the `tax` Claude Code skill. On invocation, activate the skill 
 - **Org / ownership chart** → `workspace-profile/org-chart.md`
 - **Bank/brokerage/IRS accounts** → `workspace-profile/bank-accounts.md`
 - **Cross-entity event log** → `workspace-profile/history.md`
+- **Cross-entity decision memos** → `workspace-profile/decisions/`
 - **Advisor memos, IRS correspondence** → `workspace-profile/notes/`
 
 ### Individual (1040)
 - **Individual standing facts** → `individual/profile.md`
 - **Year-crossing attributes** (NOL, AMT credit, cap loss, passive, QBI, FTC, Roth basis) → `individual/carryforwards.json`
 - **Individual history** → `individual/history.md`
+- **Individual decision memos** → `individual/decisions/`
 - **Active year workpaper** → `individual/FY<YYYY>/tax-summary.md`
 - **Quarterly estimates** → `individual/FY<YYYY>/quarterly/Q<n>/`
 
 ### Entity (per `entities/<slug>/`)
 - **Entity standing config** → `entities/<slug>/entity.md`
+- **Entity decision memos** → `entities/<slug>/decisions/`
 - **Persistent books** (COA, fixed assets, opening balances) → `entities/<slug>/books/`
 - **Corporate governance** → `entities/<slug>/corporate/` (formation, minutes, resolutions, annual-reports, licenses)
 - **Nested disregarded SMLLCs** → `entities/<slug>/disregarded/<smllc-slug>/` (books + corporate only, NO tax/)
@@ -34,7 +37,7 @@ This folder uses the `tax` Claude Code skill. On invocation, activate the skill 
 
 ## Anti-Duplication Rule
 
-A fact lives in exactly one file. If a year-scoped value diverges from the higher-level default (e.g., filing status changed mid-year), the year file records only the **delta** ("changed from MFJ to Single because …") — never copies the full profile.
+A fact lives in exactly one file. If a year-scoped value diverges from the higher-level default (e.g., filing status changed mid-year), the year file records only the **delta** ("changed from MFJ to Single because …") — never copies the full profile. A changed conclusion is a new decision memo, never an in-place annotation — the skill's `supersession.md` owns that rule.
 
 ## PDF Reading Discipline
 

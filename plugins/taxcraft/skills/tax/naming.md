@@ -201,6 +201,18 @@ Close/estimate run IDs use
 run ID. A corrected computation receives a new run ID and records
 `supersedes_run_id`; do not overwrite the earlier control or JSON artifact.
 
+### Decision memos (`supersession.md`)
+
+| Item | Form |
+|---|---|
+| Folder | `<scope-root>/decisions/` or `workspace-profile/decisions/` — scope root, never `FY<YYYY>/` |
+| Filename | `<yyyy-mm-dd> - <topic-slug>.md` (date-first so the folder sorts chronologically) |
+| Memo ID | `DEC-<YYYYMMDD>-<scope-slug>-<topic-slug>`; `<scope-slug>` is `individual`, the entity slug, or `workspace` |
+| Same day, same topic | Filename ` - 2` and ID `-2` suffix, incrementing |
+
+IDs are never recycled and memo bodies are never rewritten; a corrected memo is a new memo
+that names the old one in `Supersedes`. Parallels the run-ID rule above.
+
 ### Receipts
 
 `FY<YYYY> - receipt - <yyyy-mm-dd> - <vendor-slug> - <short-desc>.pdf`. `<short-desc>` ≤4 words, kebab-case.

@@ -16,12 +16,14 @@ Loaded by `init.md` and `migrate.md` only. Not needed in steady state — `CLAUD
 │   ├── bank-accounts.md                      ← centralized account table
 │   ├── slugs.md                              ← payer/vendor/broker/employer registry
 │   ├── history.md                            ← append-only cross-entity log
+│   ├── decisions/                            ← immutable cross-entity decision memos (`supersession.md`)
 │   └── notes/                                ← advisor memos, IRS correspondence
 │
 ├── individual/                               ← owner's 1040 workspace
 │   ├── profile.md
 │   ├── carryforwards.json
 │   ├── history.md
+│   ├── decisions/                            ← immutable decision memos, permanent, all years (`supersession.md`)
 │   ├── records/                              ← PERMANENT, year-independent (`individual/records.md`)
 │   │   ├── individual-records-audit-FY<YYYY>.json
 │   │   ├── _processed.log
@@ -74,6 +76,7 @@ Loaded by `init.md` and `migrate.md` only. Not needed in steady state — `CLAUD
 ├── entities/<entity-slug>/                   ← REGARDED entities (file their own returns)
 │   ├── entity.md
 │   ├── carryforwards.json                    ← NOLs, §163(j), §179, charitable carryovers (same flow as individual)
+│   ├── decisions/                            ← immutable decision memos, permanent, all years (`supersession.md`)
 │   ├── corporate/
 │   │   ├── corporate-records-audit-FY<YYYY>.json ← annual structured record-set evidence/status SSOT
 │   │   ├── {formation, minutes, resolutions, annual-reports, licenses}/
@@ -142,7 +145,7 @@ the corresponding facts. A W-2 filer with a standard deduction ends up with
 `individual/onboarding.md` for what each archetype creates.
 
 Permanent vs. year-scoped is the load-bearing distinction on the individual side:
-`records/`, `properties/`, `accounts/`, and `investments/` outlive any tax year;
+`records/`, `decisions/`, `properties/`, `accounts/`, and `investments/` outlive any tax year;
 `FY<YYYY>/` holds only that year's documents and numbers. The permanence test and
 the intake pipeline are owned by `individual/records.md`.
 

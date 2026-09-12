@@ -10,9 +10,10 @@ follow this intent:
 
 - **MAJOR:** a skill is removed or renamed, or a `description:` trigger's semantics change in a
   way that changes when it fires (not just wording).
-- **MINOR:** a new skill graduates from `drafts/` into `skills/`, a new `references/*.md` file
-  is added to an existing skill, a new shipped script is added under a skill's `scripts/`, or the
-  findings emission format contract gains a field.
+- **MINOR:** a new skill graduates from `drafts/` into `skills/`, a new reference file is added
+  to an existing skill (`references/*.md` for `craftsman` skills; a new sibling `*.md` sub-skill
+  file for `taxcraft`'s `tax`, whose references are its siblings), a new shipped script is added
+  under a skill's `scripts/` or `tools/`, or the findings emission format contract gains a field.
 - **PATCH:** guidance edits within an existing reference or `SKILL.md` that don't change trigger
   semantics or add/remove a skill/reference.
 
@@ -24,6 +25,64 @@ not a synonym for "public."
 ## [Unreleased]
 
 Nothing yet.
+
+## [0.10.0] (2026-09-11)
+
+Marketplace `0.10.0`; `taxcraft` moves to `0.4.0`; `craftsman` is unchanged at `0.6.0`.
+
+MINOR: a new reference file (`supersession.md`) and a new template land in the tax skill. The
+versioning policy above is amended in this release to say what it always meant: for the tax
+skill, whose references are its sibling `*.md` files, a new sibling is a new reference.
+
+The problem this release answers: without version control in the workspace, agents preserved a
+changed answer by annotating in place — a `§0a Update (date)` block prepended above the old
+analysis, strikethrough over the old figure, a paragraph "kept for the audit trail". The
+superseded answer then sat physically above the current one and the next reader met the wrong
+answer first. The skill had supersession contracts for computed runs and parsed documents, and
+none for prose.
+
+- `supersession.md` (new) — single source of truth for how a changed answer is recorded in
+  prose. Operative files state one current answer and are rewritten whole; reasoning lives in
+  immutable decision memos under `<scope-root>/decisions/`; a memo body is never edited and the
+  one permitted later edit is filling `Superseded by`. Correction vs. decision (a memo records a
+  changed conclusion, not a changed keystroke). Retain vs. prune in three buckets: acted-upon and
+  judgment-changed keep the superseded memo; a placeholder displaced by arriving evidence, with
+  nothing acted on in between, is pruned after one closure line in `open-questions.md`. Evidence
+  is never deleted. Interruption-safe order of operations. Registers list current positions only.
+  Grounded in AU-C §230 / PCAOB AS 1215, which do not require superseded drafts or preliminary
+  thinking to be retained.
+- `templates/decision-memo.md.template` (new) — labelled header (`Memo ID`, `Issued`, `Scope`,
+  `Tax years`, `Supersedes`, `Superseded by`), conclusion first, facts as pointers, authority,
+  analysis, alternatives rejected, operative files rewritten, bucket if superseding.
+- `SKILL.md` — `## Supersession rule (STRICT)` router summary beside the anti-duplication rule;
+  `supersession.md` in the sub-skill table; doctor row updated.
+- `naming.md` — "Decision memos": folder, date-first filename, `DEC-<YYYYMMDD>-<scope>-<topic>`
+  ID, same-day suffix; IDs never recycled.
+- `layout.md` — `decisions/` under `workspace-profile/`, `individual/`, and `entities/<slug>/`,
+  listed among the permanent-file folders.
+- `templates/tax-elections-and-positions-register.md.template` — `SUPERSEDED` dropped from the
+  evidence-status vocabulary; a superseded position's row is removed and its memo carries the
+  history; "Elections considered and not made" holds a one-line disposition plus memo ID, not the
+  reasoning. Trackers and ledgers (open-items tracker, follow-up log, journal entries,
+  `open-questions.md`, `pending-docs.md`) are classified as event records: rows are appended,
+  closed, or withdrawn per their own templates and corrected by correcting row, never rewritten.
+  The state-versus-event test in `supersession.md` §1 decides which rule a table follows.
+- `templates/open-questions.md.template` — `R2` example showing the bucket-(c) closure line.
+- `templates/CLAUDE.md.template` — pointer-map entries for `decisions/` at each scope; stays a
+  pointer map.
+- `accounting-101.md`, `intake.md`, `close-estimate.md` — one-line cross-references: the
+  permanent/current split governs prose too; a `tax-summary.md` row edit is a fact update, not a
+  supersession event; an estimate rerun is run supersession and needs a memo only if a judgment
+  also changed.
+- `tools/workspace-doctor` — two new report-only checks with fixture tests:
+  `check_in_place_prose_history` (update-block, update/revision, dated-update and
+  history-section headings, strikethrough, audit-trail retention prose, in operative Markdown
+  under the three workspace roots; fenced code ignored; records folders and append-only logs out
+  of scope; CommonMark fences tracked by marker and length) and `check_decision_memo_lineage`
+  (unique `Memo ID`, `Supersedes` and `Superseded by` lines present, reciprocal
+  `Supersedes` / `Superseded by` pairs within a `decisions/` folder). Both print the
+  path and a rule name, never the matched text or an ID. The README's privacy contract now states
+  the three bounded content reads the tool performs instead of claiming a single exception.
 
 ## [0.9.0] (2026-09-11)
 

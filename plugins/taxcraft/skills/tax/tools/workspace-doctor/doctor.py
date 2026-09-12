@@ -24,9 +24,21 @@ Checks performed (see README.md for detail on each):
   - __pycache__ dirs in the workspace
   - Entity trackers missing: entities/<slug>/carryforwards.json for any entity
     with books; books/capital-accounts.md for partnerships (type taken from the
-    labelled `Entity type:` field of entity.md — the only file content this
-    tool reads, scanned only until that field is found; value never printed)
+    labelled `Entity type:` field of entity.md, scanned only until that field is
+    found; value never printed)
+  - In-place prose history in operative Markdown (supersession.md §8): update
+    headings, strikethrough, "kept for the audit trail", History/Change-log
+    sections. Lines are matched against a fixed pattern list; the output is the
+    path and the rule name, never the matched text
+  - Decision-memo lineage (supersession.md §8): every decisions/*.md carries a
+    unique `Memo ID`, a `Supersedes` line and a `Superseded by` line, and
+    Supersedes / Superseded by pairs are reciprocal. Only the labelled header lines are read; IDs are never
+    printed
   - poppler (pdftotext) presence
+
+Content read, in full: (1) entity.md until the `Entity type:` field, (2) operative
+Markdown line by line against the pattern list above, (3) decision-memo header
+lines. Nothing read is ever printed; findings are paths plus a rule name.
 
 Privacy: any path with a segment containing "privileged" (case-insensitive)
 is excluded from every walk and never printed in output — see
@@ -412,6 +424,192 @@ def check_entity_trackers(root: Path) -> Finding:
     return f
 
 
+# --- supersession.md checks --------------------------------------------------
+
+# Only these top-level roots hold operative prose the rule governs.
+SUPERSESSION_ROOTS = ("workspace-profile", "individual", "entities")
+
+# Any path segment named here is a record, evidence, or a folder with its own
+# format: never scanned for in-place prose history.
+PROSE_HISTORY_SKIP_DIRS = {
+    "decisions", "notes", ".computed", ".parsed", "filed", "amended", "archive",
+    "source", "records", "matters", "corporate", "contracts", "books", "accounts",
+    "statements", "subscription", "transcripts", "issued", "check-images",
+}
+# Trackers and logs with their own row-based formats (supersession.md §1): rows are
+# events, appended/closed/withdrawn per template, so history sections are by design.
+PROSE_HISTORY_SKIP_FILES = {
+    "history.md", "open-questions.md", "pending-docs.md",
+    "cross-entity-followup-log.md", "open-items-tracker.md",
+}
+
+_H = r"^\s{0,3}#{1,6}\s*"
+# (rule name, regex). Each is a shape agents have actually written when annotating
+# a changed answer in place. The rule name is printed; the matched line never is.
+PROSE_HISTORY_RULES: list[tuple[str, re.Pattern[str]]] = [
+    ("update-block heading (§0a-style)",
+     re.compile(_H + r"(§\s*)?0[a-z]\b", re.IGNORECASE)),
+    ("update/revision heading",
+     re.compile(_H + r"(update[sd]?|revised|revisions?)\b", re.IGNORECASE)),
+    ("dated update heading",
+     re.compile(_H + r".*\b(update[sd]?|revised|amended)\s*\(\s*\d{4}-\d{2}-\d{2}", re.IGNORECASE)),
+    ("history/prior-analysis section",
+     re.compile(_H + r"(history|change ?log|prior analysis|previous (analysis|version)|superseded)\b", re.IGNORECASE)),
+    ("strikethrough",
+     re.compile(r"~~\S")),
+    ("audit-trail retention prose",
+     re.compile(r"\b(kept|retained|preserved)\s+for\s+(the\s+)?audit\s+trail\b", re.IGNORECASE)),
+]
+
+
+def _iter_operative_markdown(root: Path):
+    """Yield every *.md under the supersession roots that is operative prose:
+    not inside a record/evidence folder, not an append-only log, not privileged."""
+    for top in SUPERSESSION_ROOTS:
+        base = root / top
+        if not base.is_dir():
+            continue
+        for dirpath, dirnames, filenames in _iter_dirs(base):
+            dirnames[:] = [d for d in dirnames if d not in PROSE_HISTORY_SKIP_DIRS]
+            rel_parts = set(dirpath.relative_to(root).parts)
+            if rel_parts & PROSE_HISTORY_SKIP_DIRS:
+                continue
+            for fn in sorted(filenames):
+                if not fn.lower().endswith(".md") or fn in PROSE_HISTORY_SKIP_FILES:
+                    continue
+                yield dirpath / fn
+
+
+# CommonMark fence: a run of 3+ backticks or tildes, optionally followed by an info
+# string. A fence closes only on the same character with a run at least as long.
+_FENCE_RE = re.compile(r"^(`{3,}|~{3,})(.*)$")
+
+
+def _prose_history_rules_hit(path: Path) -> list[str]:
+    """Return the names of every PROSE_HISTORY_RULES rule that matches a line of
+    `path`, ignoring fenced code blocks. Line text is never returned."""
+    hits: list[str] = []
+    fence: tuple[str, int] | None = None  # (marker char, opening run length)
+    try:
+        with path.open(encoding="utf-8", errors="ignore") as fh:
+            for line in fh:
+                stripped = line.lstrip()
+                m = _FENCE_RE.match(stripped)
+                if m:
+                    ch, run = m.group(1)[0], len(m.group(1))
+                    if fence is None:
+                        fence = (ch, run)  # open
+                        continue
+                    if ch == fence[0] and run >= fence[1] and not m.group(2).strip():
+                        fence = None  # close: same char, at least as long, nothing after it
+                        continue
+                    # a shorter or different-char run inside an open fence is content
+                if fence is not None:
+                    continue
+                for name, rx in PROSE_HISTORY_RULES:
+                    if name not in hits and rx.search(line):
+                        hits.append(name)
+    except Exception:
+        return hits
+    return hits
+
+
+def check_in_place_prose_history(root: Path) -> Finding:
+    """Operative Markdown carrying superseded content in the reading path —
+    the pattern supersession.md exists to stop. Report-only: path and rule
+    name(s) only; the matched text is never printed."""
+    f = Finding("In-place prose history in operative files (supersession.md)")
+    for md in _iter_operative_markdown(root):
+        hits = _prose_history_rules_hit(md)
+        if hits:
+            f.add(f"{_rel(root, md)}  ({'; '.join(hits)})")
+    return f
+
+
+MEMO_FIELD_RE = re.compile(
+    r"^\s*\*\*(Memo ID|Supersedes|Superseded by)\s*:?\*\*\s*:?\s*(.*?)\s*$", re.IGNORECASE
+)
+_MEMO_EMPTY = {"", "none", "-", "—", "–", "n/a"}
+
+
+def _memo_header(path: Path) -> dict[str, str | None]:
+    """Read only the labelled header lines of a decision memo (stop at the first
+    `## ` heading). Returns {field: value-or-None}; a missing line is None, an
+    empty/none/placeholder value is ''. Values are used for reciprocity checks
+    only and are never printed."""
+    out: dict[str, str | None] = {"memo id": None, "supersedes": None, "superseded by": None}
+    try:
+        with path.open(encoding="utf-8", errors="ignore") as fh:
+            for line in fh:
+                if line.startswith("## "):
+                    break
+                m = MEMO_FIELD_RE.match(line)
+                if not m:
+                    continue
+                val = m.group(2).strip().strip("`").strip()
+                if val.startswith("<") and val.endswith(">"):
+                    val = ""  # unfilled template placeholder
+                if val.lower() in _MEMO_EMPTY:
+                    val = ""
+                out[m.group(1).lower()] = val
+    except Exception:
+        pass
+    return out
+
+
+def check_decision_memo_lineage(root: Path) -> Finding:
+    """Every decisions/*.md carries a unique Memo ID and a Supersedes line; a
+    memo named in another's Supersedes exists in the same folder and carries the
+    reciprocal Superseded by, and vice versa (supersession.md §4–§5). Header
+    lines only are read; IDs are never printed."""
+    f = Finding("Decision-memo lineage (supersession.md)")
+    seen_ids: dict[str, list[Path]] = {}
+    folders: list[tuple[Path, dict[Path, dict[str, str | None]]]] = []
+    for top in SUPERSESSION_ROOTS:
+        base = root / top
+        if not base.is_dir():
+            continue
+        for dirpath, _dirnames, filenames in _iter_dirs(base):
+            if dirpath.name != "decisions":
+                continue
+            memos = {
+                dirpath / fn: _memo_header(dirpath / fn)
+                for fn in sorted(filenames)
+                if fn.lower().endswith(".md")
+            }
+            folders.append((dirpath, memos))
+            for p, h in memos.items():
+                if h["memo id"]:
+                    seen_ids.setdefault(h["memo id"], []).append(p)
+    for mid, paths in seen_ids.items():
+        if len(paths) > 1:
+            for p in paths:
+                f.add(f"{_rel(root, p)}  (duplicate Memo ID)")
+    for _dirpath, memos in folders:
+        by_id = {h["memo id"]: p for p, h in memos.items() if h["memo id"]}
+        for p, h in memos.items():
+            if not h["memo id"]:
+                f.add(f"{_rel(root, p)}  (no Memo ID line)")
+                continue
+            if h["supersedes"] is None:
+                f.add(f"{_rel(root, p)}  (no Supersedes line)")
+            if h["superseded by"] is None:
+                f.add(f"{_rel(root, p)}  (no Superseded by line)")
+            if h["supersedes"]:
+                prev = by_id.get(h["supersedes"])
+                if prev is None:
+                    f.add(f"{_rel(root, p)}  (Supersedes names a memo not in this folder)")
+                elif memos[prev]["superseded by"] != h["memo id"]:
+                    f.add(f"{_rel(root, prev)}  (predecessor not stamped Superseded by)")
+            if h["superseded by"]:
+                nxt = by_id.get(h["superseded by"])
+                if nxt is None:
+                    f.add(f"{_rel(root, p)}  (Superseded by names a memo not in this folder)")
+                elif memos[nxt]["supersedes"] != h["memo id"]:
+                    f.add(f"{_rel(root, p)}  (Superseded by names a memo that does not supersede this one)")
+    return f
+
+
 def check_poppler() -> tuple[bool, str]:
     exe = shutil.which("pdftotext")
     if not exe:
@@ -447,6 +645,8 @@ def run(root: Path) -> int:
         check_xledger(root),
         check_ledger_export_staleness(root),
         check_entity_trackers(root),
+        check_in_place_prose_history(root),
+        check_decision_memo_lineage(root),
     ]
 
     total_issues = 0

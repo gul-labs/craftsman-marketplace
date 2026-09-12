@@ -140,7 +140,7 @@ Per `parsing.md` index shape. Slug format per `naming.md` ("Parsed cache slugs")
 
 ### 5. Update `tax-summary.md`
 
-Find the matching section (e.g., "### W-2") and append a row. Idempotent — update in place if row for same source exists. Keep formatting consistent with template. Mask SSN/EIN/account numbers to last-4 per SKILL.md → "Privacy & redaction".
+Find the matching section (e.g., "### W-2") and append a row. Idempotent — update in place if row for same source exists; a row is a fact, and replacing it is not a supersession event. If the new document changes a *conclusion* (a treatment, a position, an election), that is a decision memo per `supersession.md` §3, not a row edit. Keep formatting consistent with template. Mask SSN/EIN/account numbers to last-4 per SKILL.md → "Privacy & redaction".
 
 ### 6. Update `pending-docs.md`
 
