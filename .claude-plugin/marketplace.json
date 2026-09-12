@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "craftsman-marketplace",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "owner": {
     "name": "Atif Gul",
     "url": "https://github.com/atifgul99"
@@ -13,7 +13,7 @@
       "source": "./plugins/craftsman",
       "category": "development",
       "description": "Ship something with Lovable, Replit, Bolt, v0, Claude Code, or Codex and it works, but nobody with an engineering background has checked it before real customers arrive. craft-audit reviews the whole project the way a senior engineer would, across ten areas: not just security, but the database rules that keep one customer's data separate from another's, whether the money path is tested, and whether errors get seen before a customer has to report them. Findings are plain language, ranked by real consequence, so a broken invoice check beats a missing comment, and written to a workspace in your project so a long audit can pause and resume. The companion skill craft-fix drives the repairs but can never mark its own work fixed; only a fresh audit pass confirms that. A full worked example is included, so you can see exactly what it finds before you run it. Not a penetration test, not continuous monitoring, no numeric score.",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "author": {
         "name": "Atif Gul",
         "url": "https://github.com/atifgul99"

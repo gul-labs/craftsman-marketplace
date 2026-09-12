@@ -25,6 +25,24 @@ not a synonym for "public."
 
 Nothing yet.
 
+## [0.9.0] (2026-09-11)
+
+Marketplace `0.9.0`; `craftsman` moves to `0.6.0`; `taxcraft` is unchanged at `0.3.1`.
+
+MINOR, and a correction rather than new work. The `craftsman` content shipped in
+[#19](https://github.com/gul-labs/craftsman-marketplace/pull/19) (`ad1b920`, 2026-09-06) added a new
+`references/*.md` to an existing skill — `craft-audit/references/claim-verification.md`, 342 lines —
+plus guidance in four other skills, but left the version at `0.5.0`. Under the versioning policy at
+the top of this file, a new reference file in an existing skill is a MINOR bump.
+
+The version string is what `claude plugin update` compares. An unchanged one makes the update a
+no-op that reports success: an installed `craftsman 0.5.0` predating #19 answers *"already at the
+latest version"* and keeps serving a `craft-audit` with no claim-verification reference, with
+nothing to indicate the plugin is behind. Local installs were refreshed by hand; this bump is what
+lets everyone else's update actually resolve.
+
+No skill, reference, trigger, or line of guidance changes here — only the four version fields.
+
 ## [0.8.1] (2026-09-11)
 
 Marketplace `0.8.1`; `taxcraft` moves to `0.3.1`; `craftsman` is unchanged at `0.5.0`.

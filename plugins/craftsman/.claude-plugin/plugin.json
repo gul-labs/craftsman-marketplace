@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "craftsman",
   "description": "Ship something with Lovable, Replit, Bolt, v0, Claude Code, or Codex and it works, but nobody with an engineering background has checked it. This is the engineering review you'd get from the technical co-founder you don't have. craft-audit checks the whole project across ten areas: UX, frontend, backend, database, security, infrastructure, observability, testing, lint, and AI integrations. Security is just one of the ten; most tools in this space check only that one. Findings are plain language and ranked by real consequence, so a broken invoice check beats a missing comment, and they are written to a workspace inside your project so a long audit can pause and resume. The companion skill craft-fix drives the fixes but is never allowed to mark its own work fixed; only a fresh audit pass can confirm a finding is actually gone. Not a penetration test, not continuous monitoring, no numeric score, no legal advice. A full worked example is included.",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "author": {
     "name": "Atif Gul",
     "url": "https://github.com/atifgul99"

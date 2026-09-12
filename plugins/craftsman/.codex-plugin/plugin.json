@@ -1,6 +1,6 @@
 {
   "name": "craftsman",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Ship something with Lovable, Replit, Bolt, v0, Claude Code, or Codex and it works, but nobody with an engineering background has checked it. craft-audit audits the whole project for production readiness across ten areas (UX, frontend, backend, database, security, infrastructure, observability, testing, lint, AI integrations), not just security. Findings are ranked by real consequence, not alphabetically, so a broken invoice check beats a missing comment. The craft-fix companion drives the fixes but can never mark its own work fixed.",
   "author": {
     "name": "Atif Gul",
