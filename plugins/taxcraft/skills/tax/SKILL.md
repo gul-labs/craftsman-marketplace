@@ -160,6 +160,7 @@ Or describe what you need.
 | `migrate.md` | Convert legacy workspace to canonical layout (folders + filenames) |
 | `layout.md` | Target workspace tree; regarded vs. disregarded placement rules |
 | `portability.md` | What may live in the skill vs. the workspace; the no-jurisdiction-in-a-schema rule |
+| `supersession.md` | How a changed answer is recorded in prose: operative files state one current answer, reasoning lives in immutable decision memos under `<scope-root>/decisions/`, correction vs. decision, retain vs. prune, order of operations, register rows |
 | `naming.md` | Folder slugs, canonical document filenames, slug registry, collision rules, cross-workspace K-1 pointers |
 | `parsing.md` | PDF read discipline, parsed-cache index, TTL classes, per-doctype JSON schemas |
 | `intake.md` | Year-scoped document ingestion (canonicalize → parse → update workpaper) |
@@ -196,7 +197,7 @@ Or describe what you need.
 | `tools/dep-check/` | One-shot dependency preflight: `python3 -B "$TAX_SKILL/tools/dep-check/dep_check.py"` — checks install integrity, poppler, validator packages, optional rungs; prints the platform-correct fix command; exits 1 when a required dependency is missing. Never installs anything |
 | `tools/form-parser/` | Registry-driven parser for W-2, W-2G, 1099-INT/DIV/B/NEC/MISC/R/G/K/SA, 1099-Composite, SSA-1099, 1098/-T/-E, 5498/-SA, 1095-A: AcroForm → vision skeleton (`--vision-prompt`) → gated text → `--merge` → invariants; emits the schema-2 field envelope. Box definitions and invariants live in `tools/form-parser/doc_types.py` |
 | `tools/README.md` | 11 shipped tools (pdf-extractor, form-parser, chase-statement-parser, ibkr-parser, k1-parser, return-parser, transcript-parser, coa-categorizer, parse-verify, workspace-doctor, dep-check) — see `tools/README.md` |
-| `tools/workspace-doctor/` | Report-only lint: runs `python3 -B "$TAX_SKILL/tools/workspace-doctor/doctor.py"` from the workspace root; reports missing canonical files (e.g. `workspace-profile/slugs.md`), naming violations, empty parse caches, sync-conflict duplicates, unprocessed corporate docs — never modifies anything |
+| `tools/workspace-doctor/` | Report-only lint: runs `python3 -B "$TAX_SKILL/tools/workspace-doctor/doctor.py"` from the workspace root; reports missing canonical files (e.g. `workspace-profile/slugs.md`), naming violations, empty parse caches, sync-conflict duplicates, unprocessed corporate docs, in-place prose history in operative files and broken decision-memo lineage (`supersession.md`) — never modifies anything |
 
 Read sub-skill files via Read tool as needed. Never load all upfront.
 
@@ -313,6 +314,21 @@ it is not duplicated here, because a second copy is how the two drift apart.
 Every other location holds evidence or a pointer. Lifetime basis is **appended
 to, never recomputed from the current year alone**, and a missing prior-year
 figure is a hold, not a zero.
+
+## Supersession rule (STRICT)
+
+**An operative file states one current answer.** No update blocks, strikethrough,
+History sections, prior reasoning, or passages kept "for the audit trail". When a
+conclusion changes: write a new decision memo in `<scope-root>/decisions/` that
+names the memo it supersedes, stamp the old memo `Superseded by`, then rewrite
+the operative file whole. Never annotate in place. Memo bodies are never edited.
+
+A memo records a changed conclusion, not a changed keystroke: typos and arithmetic
+are fixed silently. A placeholder displaced by arriving evidence, with nothing
+acted on in between, is pruned after one closure line in `open-questions.md`; an
+answer that was acted upon or a judgment that changed keeps its superseded memo.
+Evidence is never deleted. Full rule, buckets, and order of operations:
+`supersession.md`.
 
 ## Workspace layout
 

@@ -12,7 +12,11 @@ a transcript check is what is actually required.
 
 `TAKEN_AND_ACCEPTED` (return accepted; transcript checked) · `TAKEN_FILED_UNCONFIRMED` (return filed,
 acceptance not yet verified) · `TAKEN_NOT_FILED` (decided, return not yet filed) · `PROPOSED`
-(recommended, not decided) · `UNDETERMINED` (a prerequisite fact is unresolved) · `SUPERSEDED`
+(recommended, not decided) · `UNDETERMINED` (a prerequisite fact is unresolved)
+
+This register lists current positions only. A superseded position's row is removed; the decision
+memo that superseded it (`<scope-root>/decisions/`, see `supersession.md` §7) carries the history.
+Rows cite a memo ID where one exists and never carry the reasoning.
 
 Never write `IN EFFECT`, `RECORDED`, `POSITION READY`, or `FILED` for anything short of
 `TAKEN_AND_ACCEPTED`.
@@ -40,9 +44,9 @@ Never write `IN EFFECT`, `RECORDED`, `POSITION READY`, or `FILED` for anything s
 Recording the decision is what stops it being re-litigated every year, and what evidences that it
 was considered at all.
 
-| # | Election | Considered on | Decision and reason | Window, if it can still be made |
+| # | Election | Considered on | Disposition (one line) · memo ID | Window, if it can still be made |
 |---|---|---|---|---|
-| 1 | <ELECTION> | <YYYY-MM-DD> | <DECISION> | <DATE / "closed"> |
+| 1 | <ELECTION> | <YYYY-MM-DD> | <NOT MADE — one-line reason> · `DEC-…` | <DATE / "closed"> |
 
 ## Annex A — quantified business-needs schedule
 

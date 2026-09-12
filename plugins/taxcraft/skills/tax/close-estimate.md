@@ -223,7 +223,8 @@ When persistence is authorized:
 - mirror only run ID, status, as-of date, headline totals, and a pointer into
   `tax-summary.md`;
 - preserve the earlier run and mark it `SUPERSEDED` when a corrected input or
-  rule changes the result.
+  rule changes the result. A rerun is run supersession, not a decision; it needs a
+  decision memo only if a judgment also changed (`supersession.md` §3).
 
 The control workpaper is the single home for authority, input, gate, and method
 status. Do not duplicate those tables across entity files.

@@ -1,0 +1,54 @@
+# Decision Memo — <SHORT TITLE>
+
+**Memo ID:** `DEC-<YYYYMMDD>-<scope-slug>-<topic-slug>`
+**Issued:** <YYYY-MM-DD>
+**Scope:** `<individual | entities/<slug> | workspace-profile>`
+**Tax years:** <FY<YYYY> | FY<YYYY>–FY<YYYY> | standing>
+**Supersedes:** <`DEC-…` | none>
+**Superseded by:** <leave empty at issue — filled only when a later memo names this one>
+
+> Immutable once issued. The body is never edited. The one permitted later edit is filling
+> `Superseded by`. A changed conclusion is a new memo (`supersession.md` §5).
+
+## Conclusion
+
+<One paragraph. The answer, stated so a reader who stops here has it. No hedging that belongs
+in the analysis.>
+
+## Question decided
+
+<What had to be decided and why it arose now.>
+
+## Facts relied on
+
+Pointers only. Figures live in their single source of truth and are not restated here.
+
+| Fact | Where it lives |
+|---|---|
+| <fact> | `<path>` |
+
+## Authority
+
+<IRC §, Treas. Reg. §, form instruction, state statute, case — each verified per `authority.md`
+at the time of issue. Note the as-of date of the rules file used.>
+
+## Analysis
+
+<Inputs → rule → result. Show the reasoning a reviewer would need to disagree with.>
+
+## Alternatives rejected
+
+| Alternative | Why not |
+|---|---|
+| <option> | <reason> |
+
+## Operative files rewritten
+
+| File | What changed |
+|---|---|
+| `<path>` | <one line> |
+
+## If superseding
+
+**Bucket:** <(a) acted upon | (b) judgment changed | n/a> — per `supersession.md` §6.
+**What was done on the prior conclusion:** <payment / filing / election / downstream figure, or "nothing">
