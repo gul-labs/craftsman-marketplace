@@ -22,6 +22,10 @@ Checks performed (see README.md for detail on each):
     extensions)
   - Loose K-1/tax PDFs at workspace root or individual/ root
   - __pycache__ dirs in the workspace
+  - Entity trackers missing: entities/<slug>/carryforwards.json for any entity
+    with books; books/capital-accounts.md for partnerships (type taken from the
+    labelled `Entity type:` field of entity.md — the only file content this
+    tool reads, scanned only until that field is found; value never printed)
   - poppler (pdftotext) presence
 
 Privacy: any path with a segment containing "privileged" (case-insensitive)
@@ -353,6 +357,61 @@ def check_ledger_export_staleness(root: Path) -> Finding:
     return f
 
 
+ENTITY_TYPE_RE = re.compile(r"^\s*[-*]?\s*\*{0,2}Entity type\*{0,2}\s*:\s*(.+?)\s*$", re.IGNORECASE)
+
+
+def _entity_type(entity_md: Path) -> str | None:
+    """Return the value of the `Entity type:` field in an entity.md, or None.
+
+    This is the ONE place the doctor reads file content: it scans entity.md
+    line by line until the labelled field (the canonical
+    `templates/entity-config.md.template` line `- **Entity type**: …`) is found
+    or the file ends, then stops. The value is used only to classify the entity
+    and is never printed; no other file is opened.
+    """
+    try:
+        with entity_md.open(encoding="utf-8", errors="ignore") as fh:
+            for line in fh:
+                m = ENTITY_TYPE_RE.match(line)
+                if m:
+                    return m.group(1)
+    except Exception:
+        return None
+    return None
+
+
+def _is_partnership_type(value: str) -> bool:
+    v = value.lower()
+    return "partnership" in v and "smllc" not in v and "disregarded" not in v
+
+
+def check_entity_trackers(root: Path) -> Finding:
+    """Every regarded entity that keeps books must carry its carryforward tracker,
+    and every partnership must carry a capital-accounts file.
+
+    A section 704(d) suspended loss, an EBIE allocation, or a passed-through credit
+    that lives only in prose is not tracked. Entity type comes from the labelled
+    `Entity type:` field of entity.md (see _entity_type); an entity whose type
+    cannot be read is reported as such rather than silently skipped. Report-only,
+    paths only.
+    """
+    f = Finding("Entity trackers missing (carryforwards.json / books/capital-accounts.md / unreadable entity type)")
+    for entity_md in sorted(root.glob("entities/*/entity.md")):
+        if _is_privileged(entity_md):
+            continue
+        entity_root = entity_md.parent
+        has_books = (entity_root / "books").is_dir()
+        if has_books and not (entity_root / "carryforwards.json").is_file():
+            f.add(_rel(root, entity_root / "carryforwards.json"))
+        etype = _entity_type(entity_md)
+        if etype is None:
+            f.add(f"{_rel(root, entity_md)}  (no readable `Entity type:` field — cannot classify)")
+            continue
+        if _is_partnership_type(etype) and not (entity_root / "books" / "capital-accounts.md").is_file():
+            f.add(_rel(root, entity_root / "books" / "capital-accounts.md"))
+    return f
+
+
 def check_poppler() -> tuple[bool, str]:
     exe = shutil.which("pdftotext")
     if not exe:
@@ -387,6 +446,7 @@ def run(root: Path) -> int:
         check_bean_ledgers(root),
         check_xledger(root),
         check_ledger_export_staleness(root),
+        check_entity_trackers(root),
     ]
 
     total_issues = 0

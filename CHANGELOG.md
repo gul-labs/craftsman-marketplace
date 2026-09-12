@@ -25,6 +25,42 @@ not a synonym for "public."
 
 Nothing yet.
 
+## [0.8.1] (2026-09-11)
+
+Marketplace `0.8.1`; `taxcraft` moves to `0.3.1`; `craftsman` is unchanged at `0.5.0`.
+
+PATCH: guidance edits within existing references plus a new check in the shipped
+`workspace-doctor` script; no new skill, reference, or trigger change.
+
+- `entities/partnership.md` — §704(d) year-end ordering vs §731 distribution-date basis (two
+  different moments); zero-capital promote interests and Reg. §1.704-2; Item K/Item L blanks are
+  facts to resolve, not basis conclusions; entity-scope `carryforwards.json` is mandatory at first
+  close and reconciled to filed forms; ownership percentages come from the members schedule, not
+  the signature block; tier-2 K-1s (pointer to `naming.md`); interest transfers are a
+  fact-gathering exercise (§706(d)/Reg. §1.706-4, §742/§1012 vs §721/§723, §743(b)); unreported
+  lower-tier cash gets a classification hold; two K-1 versions (pointer to `parsing.md`);
+  extension status is "unverified" until IRS evidence exists — it is not assumed to be a BBA year.
+- `entities/disregarded.md` — close step 1a: confirm the SMLLC's external results reach
+  consolidated equity; the capital-flow symmetry invariant cannot see a missed P&L balance; no
+  parent-side equity-method push-up.
+- `reconciliation.md` — tracker-to-filed-form tie in the K-1/capital rec; tier-2 rows never in the
+  upstream pivot.
+- `naming.md` — tier-2 K-1 location/filename/README as the single home for that rule.
+- `parsing.md` — positional/checkbox fields are confirmed from the rasterized page regardless of
+  the text-quality gate; two versions of one document are settled by the issuer, not metadata.
+- `scenarios/tiered-partnership-se.md` — tier-2 box 14a is that tier's fact; the 1997 proposed
+  regulations' (h)(4) exception does not cure authority to contract; case-law/proposed-reg
+  positions carry ⚠ and a counsel hold.
+- `templates/carryforwards.template.json` — schema 2: `scope` discriminator with per-section
+  `_scope`; entity sections (`section_704d_suspended_losses`, `credits_passed_through`, a typed
+  per-year `section_6221b_election`); the recipient-basis structures `reconciliation.md` § 5
+  already referenced (`partnership_outside_basis`, `scorp_stock_basis`, `scorp_debt_basis`).
+  `init.md` prunes by scope at instantiation.
+- `tools/workspace-doctor` — new `check_entity_trackers` (missing `carryforwards.json` /
+  `books/capital-accounts.md`, entity type from the labelled `Entity type:` field; the one line of
+  content the tool reads, documented in the README) with fixture tests (`test_doctor.py`),
+  wired into the `taxcraft-evals` CI job so the fixture is a gate and not just a local run.
+
 ## [0.8.0] (2026-09-06)
 
 Marketplace `0.8.0`; `taxcraft` moves to `0.3.0`; `craftsman` is unchanged at

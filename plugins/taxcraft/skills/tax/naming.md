@@ -54,6 +54,29 @@ All inbound documents are renamed to canonical form on ingest (`intake.md` Step 
 | K-1 (1041 trust) | `FY<YYYY> - K-1-T - <trust-slug>.pdf` |
 | K-3 | `FY<YYYY> - K-3 - <sponsor-slug>.pdf` |
 
+### Tier-2 K-1s (a K-1 the sponsor itself received) — informational, NEVER in `k1s-received/`
+
+**This section is the single home for the rule** (`entities/partnership.md` and
+`reconciliation.md` point here). A K-1 issued *to* a lower-tier partnership by *its* investee
+names that partnership in Part II, not this taxpayer. Nothing on it is reported, allocated, or
+added to basis two tiers down. It is kept only as evidence (debt at the tier, fee flows,
+year-of-inclusion questions for the sponsor) and lives with the investment — under
+`<scope-root>` (`individual/` or `entities/<slug>/`, **no** `tax/` segment) — never with the
+year's source documents:
+
+| Doc | Location and filename |
+|---|---|
+| Tier-2 K-1 | `<scope-root>/investments/<investment-slug>/upstream-<issuer-slug>-DO-NOT-REPORT/<YYYY-MM-DD> - K-1 - <issuer-slug> - ty<YYYY> - to-<recipient-slug>[ - <STATUS>].pdf` |
+| Folder README (required) | `…/upstream-<issuer-slug>-DO-NOT-REPORT/README.md` — opens with the one rule (partner named is X, not us; nothing goes on a return), lists each file's status, tabulates the informational figures, and states the open questions they raise |
+
+`<YYYY-MM-DD>` is the document's issuance date, deliberately date-first (unlike the canonical
+`FY<YYYY> - K-1 - …` grammar) so that two undisclosed versions of the same tax year sort by
+issuance. `<STATUS>` is a single optional token from `CONTROLLING | SUPERSEDED`; omit it when
+only one version exists. Which version is controlling is decided per `parsing.md` § Two versions
+of one document, not by metadata. The folder name is the guard-rail: an agent that lists the
+directory sees the rule before it sees a PDF. The parent `investments/<investment-slug>/README.md`
+carries a pointer paragraph that says which tier is reportable.
+
 ### Issued documents (entity sending out)
 
 | Doc | Filename |

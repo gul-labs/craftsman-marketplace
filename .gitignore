@@ -16,3 +16,7 @@ __pycache__/
 
 # Local Codex review reports (contain local absolute paths; kept on disk, not published)
 docs-review-*.md
+
+# Per-release Codex review rounds. Same reason as docs-review-*.md, plus they quote the real
+# engagement figures the reviews were checking the guidance had been scrubbed of.
+.reviews/

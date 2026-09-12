@@ -89,6 +89,8 @@ S-corp — stock + debt basis rollforward per shareholder, AAA rollforward at en
 
 Output: `entities/<slug>/tax/FY<YYYY>/annual/workpapers/capital-rec-<partner-slug>.md`.
 
+**Tracker-to-filed-form tie (part of this rec, every close).** Each carryforward the entity or its partners carry — §704(d) suspended per lower-tier partnership, §163(j) EBIE per originating partnership, §465 per activity, partner-level Form 8582 per activity, §199A loss carryover — is tied to the **filed** form of the prior year (8582 Part VII worksheet, 8990, 6198, 8995 line 16), and the tie is written into `<scope-root>/carryforwards.json`. A figure that ties only to the workpaper that produced the return, or that has no tracker file at all, is a reconciling item: a suspended loss can drop off a filed return, and a carryforward kept only in prose can drift, without anything else in the close noticing.
+
 ### 5. Partner outside-basis / S-corp shareholder basis (recipient side)
 
 The partner's/SH's **outside basis** is reconstructed independently of the issuer's capital account — they can diverge (§743(b) adjustments, §704(c) built-in gain, debt-financed basis, etc.). Track per-position in `<scope-root>/carryforwards.json` under `partnership_outside_basis` / `scorp_stock_basis` / `scorp_debt_basis`.
@@ -138,7 +140,11 @@ Character carries through. A box-9a LTCG on an upstream K-1 is LTCG on the holdi
 
 Output: `entities/<slug>/tax/FY<YYYY>/annual/workpapers/upstream-k1-pickup.md` with the pivot, column sums, the as-filed Sch K row, and a reconciling-items list.
 
-Disregarded SMLLCs holding upstream K-1s: run this rec at the SMLLC's level, then the result consolidates into the regarded parent's Sch K. Don't run separate recs at both levels — single source of truth at the level that actually receives the K-1.
+Disregarded SMLLCs holding upstream K-1s: run this rec at the SMLLC's level, then the result consolidates into the regarded parent's Sch K. Don't run separate recs at both levels — single source of truth at the level that actually receives the K-1. Confirm the SMLLC's external results reach consolidated equity (`entities/disregarded.md` § Close procedure step 1a) — the capital-flow symmetry check cannot see a P&L balance the consolidation missed.
+
+**Rows are the K-1s issued TO this entity — nothing higher.** A K-1 that a lower-tier partnership itself received (a *tier-2* K-1, which names *that* partnership as the partner) never appears in the pivot, in Sch K, or in basis; picking one up overstates the return by the lower tier's entire allocated amount. Where it is kept and how it is named is defined in `naming.md` § Tier-2 K-1s; keep it out of `source/k1s-received/`.
+
+**A position that moved during the year is not a pivot row until the transfer facts are settled** — see `entities/partnership.md` Common Issues (transfers).
 
 ### 9. Schedule L rollforward (C-corps, balance-sheet 1065s)
 

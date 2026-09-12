@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "taxcraft",
   "description": "US tax and accounting work for people whose situation outgrew consumer software but who still do the prep themselves: multiple entities, K-1s that arrive late and wrong, basis and carryforwards nobody is tracking, quarterly estimates guessed at rather than computed. It builds the workpapers a CPA would build — transaction-level books from raw statements and CSVs, reconciled balance sheets, partner and shareholder basis, capital-loss and NOL and passive and QBI carryforwards, 1040-ES and corporate estimates under the annualized income method — and shows the math with the Code section behind it. Covers 1040, 1065, 1120-S, 1120, disregarded SMLLCs, and corporate governance records (bylaws, minutes, consents, annual reports, stock issuances). Every year's rules are pinned to a dated rules file, so a 2024 number never silently answers a 2026 question. It does not file returns and it is not tax advice: it produces estimates, workpapers, and drafts for a licensed CPA, EA, or attorney to verify before you rely on them.",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "author": {
     "name": "Atif Gul",
     "url": "https://github.com/atifgul99"

@@ -170,7 +170,7 @@ If there's an individual 1040 trail:
 
 1. Create `individual/`
 2. Write `individual/profile.md` from `templates/profile.md.template` — fill from Batch A + C (individual-level K-1s) + D (individual-level properties, rare)
-3. Write `individual/carryforwards.json` from `templates/carryforwards.template.json` — fill from extracted 1040
+3. Write `individual/carryforwards.json` from `templates/carryforwards.template.json` — set `"scope": "individual"` and keep only the top-level keys listed in the template's `_scope_keys.individual` (delete every other data key); fill from extracted 1040
 4. Write `individual/history.md`
 5. If any disregarded SMLLCs are owned directly by the individual (Batch B identified them), create `individual/disregarded/<smllc-slug>/` with the same sub-structure as entity-nested disregarded (entity.md, corporate/, accounts/, books/, contracts/) — NO `tax/` folder
 6. Pick an active year (Phase 5)
@@ -186,7 +186,7 @@ For each regarded entity in Batch B:
 5. Write `entities/<slug>/books/chart-of-accounts.md` from `templates/chart-of-accounts.md.template` — seed based on entity type (C-corp vs partnership have different COA defaults)
 6. Write `entities/<slug>/books/fixed-assets.md` from `templates/fixed-assets.md.template` — empty header
 7. Write `entities/<slug>/books/opening-balances.md` from `templates/opening-balances.md.template` — seed from prior Schedule L if extracted
-8. Write `entities/<slug>/carryforwards.json` from `templates/carryforwards.template.json` — fill from extracted 1120/1120-S/1065 (NOL, §163(j), §179, charitable carryover), same flow as individual
+8. Write `entities/<slug>/carryforwards.json` from `templates/carryforwards.template.json` — set `"scope": "entity"` and keep only the top-level keys listed in the template's `_scope_keys.entity` (delete every other data key, and the entity-list keys this entity type does not use); fill from extracted 1120/1120-S/1065 (NOL, §163(j), §179, charitable carryover; for a partnership that holds lower-tier interests also `section_704d_suspended_losses`, `partnership_outside_basis`, `section_6221b_election`), same flow as individual
 9. If disregarded SMLLCs belong to this entity: create `disregarded/<smllc-slug>/` with the same sub-structure minus `tax/`
 
 `capital-accounts.md`, `journal-entries.md`, `general-ledger.csv`, and `transaction-ledgers/` are not seeded at init — they are created at first close (see `layout.md`).

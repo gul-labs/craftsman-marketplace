@@ -1,15 +1,23 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "scope": "individual | entity",
   "as_of_tax_year": null,
   "last_updated": "YYYY-MM-DD",
-  "_note": "Rolled forward only when a tax year is marked FILED. Working values during an open year live in FY<year>/tax-summary.md.",
+  "_note": "Rolled forward only when a tax year is marked FILED. Working values during an open year live in FY<year>/tax-summary.md. One template, two scopes: set `scope` at instantiation and keep ONLY the top-level keys listed for that scope in `_scope_keys` below (delete every other data key; the `_*` note keys may stay). Per-section `_scope` tags are informational; `_scope_keys` is the authority. individual/carryforwards.json keeps the individual keys; entities/<slug>/carryforwards.json keeps the entity keys (partnership.md section 1065 Flow item 4). At every close reconcile each section to the FILED form it feeds (8582 Part VII, 8995 line 16, 8990, 6198, 8801, 1116) — not to the workpaper that fed the form.",
+  "_scope_keys": {
+    "individual": ["capital_loss", "nol", "amt_credit_8801", "passive_loss_8582", "charitable_carryover", "foreign_tax_credit_1116", "section_163j_interest", "partnership_outside_basis", "scorp_stock_basis", "scorp_debt_basis", "hsa_basis_8889_excess_contribs", "section_179_carryover", "investment_interest_4952", "at_risk_6198", "adoption_credit_carryforward", "section_25D_carryforward", "general_business_credit_39", "qbi_negative_carryforward", "qualified_ptp_reit_negative_carryforward"],
+    "entity": ["nol", "charitable_carryover", "section_163j_interest", "partnership_outside_basis", "section_179_carryover", "general_business_credit_39", "section_704d_suspended_losses", "credits_passed_through", "section_6221b_election"],
+    "_note": "Entity list covers C-corp (nol, charitable, 163j, 179, GBC) and partnership (163j, outside basis in lower tiers, 704(d), credits passed through, 6221(b)) needs; delete what the entity type does not use. Scalars carry no _scope tag — this list is how they are pruned."
+  },
   "capital_loss": {
+    "_scope": "individual",
     "short_term": 0,
     "long_term": 0,
     "source_year": null
   },
   "nol": [
     {
+      "_scope": "individual | entity (C-corp)",
       "origin_year": null,
       "amount_remaining": 0,
       "pre_2018_or_post": "post-2018",
@@ -19,6 +27,7 @@
   "amt_credit_8801": 0,
   "passive_loss_8582": [
     {
+      "_scope": "individual",
       "activity": "<rental address or entity name>",
       "type": "rental | nonrental-passive | ptp",
       "ptp_name": null,
@@ -29,15 +38,17 @@
   ],
   "charitable_carryover": [
     {
+      "_scope": "individual | entity (C-corp)",
       "year_contributed": null,
       "type": "cash-60pct | cash-30pct | stock-30pct | stock-20pct | other",
       "remaining": 0,
       "expires": null,
-      "_note": "5-year carryover rule \u2014 track vintage"
+      "_note": "5-year carryover rule — track vintage"
     }
   ],
   "foreign_tax_credit_1116": [
     {
+      "_scope": "individual",
       "basket": "passive|general|foreign_branch|GILTI",
       "year_arising": null,
       "amount_remaining": 0,
@@ -46,18 +57,85 @@
   ],
   "section_163j_interest": [
     {
+      "_scope": "individual | entity",
       "partnership_slug": "",
       "year_allocated": null,
       "suspended_amount": 0,
       "basis_reduced_when_allocated": 0
     }
   ],
-  "_lifetime_basis_note": "Lifetime basis is NOT a carryforward and does not live here. IRA nondeductible basis -> individual/records/basis/form-8606-basis.md (one per individual); Roth contribution basis and conversion layers -> individual/records/basis/roth-basis.md; AMT dual basis -> records/basis/amt-dual-basis.md; pass-through outside basis -> individual/investments/<slug>/position.md; property -> individual/properties/<slug>/depreciation-schedule.md; securities and digital-asset lots -> individual/accounts/<slug>/lot-basis.md. See individual/1040.md section 5.",
+  "partnership_outside_basis": [
+    {
+      "_scope": "individual | entity",
+      "_note": "Recipient-side outside basis per position (reconciliation.md section 5). Reconstructed independently of the issuer's Item L; may diverge (section 743(b), section 704(c), debt-financed basis).",
+      "position_slug": "",
+      "issuer_ein_last4": "",
+      "basis_at_year_end": 0,
+      "share_of_liabilities_at_year_end": { "nonrecourse": 0, "qualified_nonrecourse": 0, "recourse": 0 },
+      "at_risk_465_at_year_end": 0,
+      "workpaper": "<path to the basis rollforward>"
+    }
+  ],
+  "scorp_stock_basis": [
+    { "_scope": "individual", "position_slug": "", "stock_basis_at_year_end": 0, "workpaper": "" }
+  ],
+  "scorp_debt_basis": [
+    { "_scope": "individual", "position_slug": "", "debt_basis_at_year_end": 0, "face_amount": 0, "workpaper": "" }
+  ],
+  "section_704d_suspended_losses": [
+    {
+      "_scope": "entity (partnership that is itself a partner in lower-tier partnerships)",
+      "lower_tier_partnership": "<issuer name as printed on the K-1>",
+      "lower_tier_ein_last4": "",
+      "basis_at_year_end": 0,
+      "return_position_history": [
+        { "tax_year": null, "loss_allocated": 0, "amount_claimed_on_return": 0, "amount_carried_on_return": 0, "status": "" }
+      ],
+      "return_position_carryforward": 0,
+      "correct_law_reference_history": {
+        "_note": "What the limitation would have produced had every year been filed correctly. Reference ONLY — never summed into the return position."
+      },
+      "character": "rental | ordinary | portfolio — and whether carried as a previously-disallowed section 199A item (Reg. 1.199A-3(b)(1)(iv))",
+      "release_condition": "basis restored: income allocation, section 752 share, contribution",
+      "_ordering_note": "Two different moments: section 731 gain is measured against basis IMMEDIATELY BEFORE each distribution (year-end treatment only for advances/drawings against the current year's share, Reg. 1.731-1(a)(1)(ii)); the section 704(d) loss limitation is applied at YEAR-END after the year's income and after distributions already taken into account (Reg. 1.704-1(d)(2); section 705(a)(2); Rev. Rul. 66-94)."
+    }
+  ],
+  "credits_passed_through": [
+    {
+      "_scope": "entity",
+      "_note": "Informational reminder, not a carryforward balance and not summed anywhere: a credit that is not listed here falls off the partners' returns.",
+      "tax_year": null,
+      "credit": "<e.g. section 45L Energy Efficient Home Credit>",
+      "source": "<issuer> — K-1 box 15 code <x>",
+      "amount": 0,
+      "per_partner": 0,
+      "partner_forms": "<e.g. Form 8908 -> Form 3800>; basis reduction already reflected via box 18 C when applicable"
+    }
+  ],
+  "section_6221b_election": {
+    "_scope": "entity (partnership)",
+    "_note": "ANNUAL election-out of the centralized audit regime, valid only on a timely-filed return including a valid extension (Reg. 301.6221(b)-1(b)(1)). One record per year. `status` is one of: elected | not-elected | ineligible | unverified. `timely_filed` is a fact established from IRS evidence, not inferred from the absence of a document; when it cannot be established, leave `unverified` and say what evidence is missing.",
+    "years": [
+      {
+        "tax_year": null,
+        "eligible": null,
+        "status": "elected | not-elected | ineligible | unverified",
+        "schedule_b_question": "<the election-out question number on that year's Schedule B>",
+        "return_filed_date": null,
+        "extension_filed": null,
+        "extension_evidence": "<transcript / acceptance-notice path / none>",
+        "timely_filed": null,
+        "notes": ""
+      }
+    ]
+  },
+  "_lifetime_basis_note": "Lifetime basis is NOT a carryforward and does not live here. IRA nondeductible basis -> individual/records/basis/form-8606-basis.md (one per individual); Roth contribution basis and conversion layers -> individual/records/basis/roth-basis.md; AMT dual basis -> records/basis/amt-dual-basis.md; property -> individual/properties/<slug>/depreciation-schedule.md; securities and digital-asset lots -> individual/accounts/<slug>/lot-basis.md. See individual/1040.md section 5. (Pass-through outside basis is tracked above under partnership_outside_basis / scorp_*_basis because it moves every year.)",
   "hsa_basis_8889_excess_contribs": 0,
   "section_179_carryover": 0,
   "investment_interest_4952": 0,
   "at_risk_6198": [
     {
+      "_scope": "individual",
       "activity": "",
       "section_465_activity": "",
       "suspended_beginning": 0,
