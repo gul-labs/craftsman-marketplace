@@ -98,8 +98,8 @@ Any write that spans more than one table — or more than one row in a way that 
 **The rule is simple:** if a second write depends on the first, they are one logical operation. One transaction, one commit or one rollback.
 
 ```ts
-// Drizzle (adapt the client reference to match the repo's setup)
-await db.transaction(async (tx) => {
+// Drizzle (through the repo's bounded transaction helper)
+await withTransaction(async (tx) => {
   const [order] = await tx.insert(orders).values(orderData).returning();
   await tx.insert(orderItems).values(items.map(i => ({ ...i, orderId: order.id })));
   await tx.update(inventory).set({ reserved: sql`reserved + ${qty}` }).where(...);
@@ -107,11 +107,13 @@ await db.transaction(async (tx) => {
 });
 ```
 
+**Route every transaction through the repo's transaction helper** (`connection-pooling.md` → "The transaction helper"): it bounds the whole transaction with a deadline, destroys a client that failed mid-transaction so it is never reused, and rethrows the original error rather than the rollback failure. A raw `db.transaction(...)` scattered through services gets none of that.
+
 **Scope transactions tightly.** A transaction that holds a write lock while making an HTTP call to a third-party service will block concurrent writers for the duration of that HTTP round-trip, or longer. Do external I/O (email, webhook, payment gateway) *outside* the transaction — after commit — or use the outbox pattern. The application-side ordering of these side effects (outbox, compensating actions, idempotency keys) is the domain of **`craft-backend`** → `side-effects.md`.
 
 **Isolation levels.** Defaults differ by engine — Postgres uses `READ COMMITTED`; MySQL/InnoDB uses `REPEATABLE READ`; SQLite is effectively serializable for writes. Don't assume a default — verify against your dialect.
 
-Postgres `REPEATABLE READ` gives snapshot isolation: it prevents phantom reads (stronger than the SQL standard requires) but still allows write skew — two transactions can each read a consistent snapshot, both pass a check, and both write, producing a result neither would have allowed serially. For operations where that's not acceptable — a read-then-write like "decrement stock if quantity holds" — use `SERIALIZABLE`, which Postgres implements via SSI (serializable snapshot isolation) and gives true serializable correctness, not just phantom prevention. The cost is serialization errors (`40001`) under contention; wrap `SERIALIZABLE` transactions in a retry loop that catches that code and retries the transaction from the start.
+Postgres `REPEATABLE READ` gives snapshot isolation: it prevents phantom reads (stronger than the SQL standard requires) but still allows write skew — two transactions can each read a consistent snapshot, both pass a check, and both write, producing a result neither would have allowed serially. For operations where that's not acceptable — a read-then-write like "decrement stock if quantity holds" — use `SERIALIZABLE`, which Postgres implements via SSI (serializable snapshot isolation) and gives true serializable correctness, not just phantom prevention. Under contention, retry the whole transaction for `40001` (serialization) or `40P01` (deadlock) at most three times with jittered backoff. Never auto-retry `57014`, a connection error on a non-idempotent call, or an unknown COMMIT outcome; see `connection-pooling.md` → "Health, errors, and retries".
 
 **MySQL/InnoDB note:** `REPEATABLE READ` there uses MVCC for consistent non-locking reads (a snapshot as of transaction start), and additionally applies gap locks on index ranges for locking reads/DML to block concurrent inserts that would otherwise create phantoms in those ranges — a different mechanism from Postgres's snapshot isolation, so don't carry Postgres assumptions across dialects.
 

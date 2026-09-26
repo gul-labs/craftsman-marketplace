@@ -374,7 +374,10 @@ COMMIT;
 ```
 
 `SET LOCAL` is transaction-scoped and reset automatically at commit/rollback — it cannot leak to the
-next transaction that lands on the same pooled connection. See `connection-pooling.md` for the full
+next transaction that lands on the same pooled connection. From application code prefer the
+parameterisable equivalent `select set_config('app.tenant_id', $1, true)` (the `true` makes it
+transaction-local); `SET LOCAL` cannot take a bind parameter, which tempts string interpolation.
+Issue it inside the repo's transaction helper (`connection-pooling.md` → "The transaction helper"). See `connection-pooling.md` for the full
 pgBouncer transaction-mode gotcha list.
 
 ### Auditing a project that deliberately chose *not* to use RLS

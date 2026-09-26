@@ -11,10 +11,11 @@ description: >-
 
 # DB Craft
 
-This skill encodes one engineer's standard for database work, applied the same way across every
-repo. The **method and opinions** live here; the **specifics** (which ORM, which dialect, which
-migration tool, what the tenant-scope helper is called) live in the target repo — always discover
-them first, never assume or hardcode.
+This skill encodes one engineer's method for database work. Discover the target repo's dialect,
+current adapter, migrations, and tenant-scope helpers before editing. Projects that explicitly
+adopt the Craftsman Postgres profile follow `references/postgres-standard.md`: its Node adapter is
+`pg` with `drizzle-orm/node-postgres`. Elsewhere, assess the actual provider, runtime, and failure
+evidence before recommending a driver migration. Other dialects need their own choices.
 
 ## Operating principle — discover before you build
 
@@ -75,6 +76,13 @@ These judgments keep output consistent — apply them unless the user overrides:
 - **Index for measured patterns, not guesses.** Run EXPLAIN ANALYZE on the slow query, confirm the
   index would be used, then add it. Speculative indexes cost write performance on every insert and
   update.
+- **For projects adopting the Postgres profile, one query per socket and every transaction bounded.** Use a
+  driver configuration that never pipelines (node-postgres with `pipeline` off),
+  attach error handlers to idle *and* checked-out clients, and route every transaction through one
+  helper with a deadline covering pool acquisition and transaction work. Timeouts come from role
+  defaults and `SET LOCAL`, not startup parameters. Runtime traffic and migrations use separate
+  guarded URLs, and tests never reach a non-loopback database. The profile's numeric limits and
+  exception process are in `references/postgres-standard.md`.
 - **Destructive or large-table migrations are split into stages.** Add the column nullable → backfill
   in batches → add the constraint → drop the old column. Doing all four steps in one migration risks
   long locks and an unrecoverable failure mid-way.
@@ -100,13 +108,15 @@ These docs assume PostgreSQL. If your project uses SQLite or MySQL, check driver
 
 Read the one matching the current task — they hold the concrete patterns, not this overview:
 
+- `references/postgres-standard.md` — canonical requirements, scope, operational defaults, and exceptions for projects adopting the Craftsman Postgres profile
 - `references/schema.md` — column types, naming conventions, timestamp and soft-delete patterns
 - `references/migrations.md` — generation workflow, naming, reversibility, safe apply checklist
 - `references/access-patterns.md` — tenant-scoped query helpers, soft-delete filtering, pagination
 - `references/indexing.md` — EXPLAIN workflow, index types, GIN indexes, partial indexes, composite key order
 - `references/integrity.md` — transactions, FK strategy, constraint naming, large-table backfill stages
-- `references/connection-pooling.md` — pool sizing math, pgBouncer config, Drizzle pool options, leak detection
-- `references/seeding-and-testing.md` — idempotent seeds, FK-aware ordering, per-test transaction rollback
+- `references/connection-pooling.md` — pool sizing and fleet budget, driver choice behind poolers, runtime vs direct URLs, node-postgres pool config, timeouts and roles, the transaction helper, session locks, leak detection
+- `references/driver-migration.md` — moving postgres.js → node-postgres: inventory, result-shape/type compatibility tests, option mapping, raw-API rewrites, verification gate
+- `references/seeding-and-testing.md` — idempotent seeds, FK-aware ordering, per-test transaction rollback, test-database safety, standard DB test suites T1–T8
 
 ## Audit checklist (for craft-audit)
 
@@ -149,9 +159,45 @@ Forbidden: `###` headings; `## ID · 🔴 · open` shorthand; severity/status as
       `references/indexing.md`
 - [ ] Check destructive or large-table changes are staged (add nullable → batched backfill → add
       constraint → drop old), not done in one long-locking migration → `references/integrity.md`
-- [ ] Connection pool is sized appropriately (not using default unlimited connections, pgBouncer
-      configured if serverless or many app instances; serverless runtime pooling constraints →
-      craft-infra) → `references/connection-pooling.md`
+
+The following driver, pool, timeout, migration-path and T1–T8 checks apply to projects adopting
+`references/postgres-standard.md`. For other Postgres projects, use them as diagnostic questions;
+do not impose an unrelated stack migration without evidence.
+
+- [ ] Connection pool is sized appropriately (serverless starts at `max: 1`; record the fleet
+      budget against the pooler's client limit, starting at 50% unless measured capacity and an
+      explicit project decision justify another limit; serverless runtime constraints → craft-infra) →
+      `references/connection-pooling.md`
+- [ ] Flag profile driver/pooler incompatibility: postgres.js in runtime, workers, scripts or migrations;
+      `max_pipeline: 0` as a supposed fix; node-postgres `pipeline: true`; named prepared statements on
+      pooled connections; if a move is warranted, plan it with the migration playbook →
+      `references/connection-pooling.md` · `references/driver-migration.md`
+- [ ] Pool construction: one pool per process (cached across hot reload), error handlers on idle
+      *and* checked-out clients, the platform suspension helper on serverless, pools ended on
+      worker shutdown and in script `finally` → `references/connection-pooling.md`
+- [ ] Connection targets: separately guarded, approved runtime and migration URLs (transaction
+      pooler for transient/serverless Supabase traffic; a documented persistent runtime may use
+      direct/session mode), with
+      fail-closed guards (no silent port rewriting), SSL verified with an explicit object and no URL
+      `ssl*` params → `references/connection-pooling.md`
+- [ ] Timeouts and roles: no reliance on startup-parameter timeouts behind a pooler; role-level
+      defaults below route deadlines; no plain `SET`/`set_config(…, false)` on pooled runtime
+      connections; runtime and migration roles separated or the runner sets session timeouts
+      before `BEGIN` → `references/connection-pooling.md` · `references/migrations.md`
+- [ ] Transactions go through one helper: wall-clock deadline checked before COMMIT, a timeout
+      during COMMIT reported as an unknown outcome (not blindly retried), client destroyed on any
+      failure, original error rethrown with the rollback failure kept (`rollbackError`), savepoints only by
+      nesting on the helper's `tx`, no network I/O inside, `xact` advisory locks only; session locks/LISTEN only in a singleton module on the direct URL, aborting work
+      on connection loss → `references/connection-pooling.md`
+- [ ] Migration apply path: direct/session URL, migration role, never in the platform build or at
+      boot, staging first, drift check and journal test in CI → `references/migrations.md`
+- [ ] Test-database safety and suites: tests cannot reach a non-loopback DB (resolver refuses under
+      a test runner, no override), unit tests cannot instantiate a real pool, T1–T8 are present
+      (only inapplicable subcases may be n/a with a reason), pool/driver/timeout behaviour tested
+      on loopback Postgres rather than PGlite or mocks → `references/seeding-and-testing.md`
+- [ ] DB health and retries: liveness has no DB call; protected readiness probes the shared pool
+      within 2–5 s; pool counts and classified failures are observable; retries are limited to
+      `40001`/`40P01` (at most three with jitter) or explicitly idempotent connection failures,
+      never `57014` or an unknown COMMIT outcome → `references/connection-pooling.md`
 - [ ] Check PII columns are identified/flagged (comment or naming convention) and kept out of
       primary keys, public URLs, and log output → `references/schema.md`
-

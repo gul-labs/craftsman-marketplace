@@ -1,6 +1,6 @@
 # Layer 3 — Components
 
-The supported component set — forms, tables, modals, navigation, notifications — built on Layer 1 tokens and Layer 2 primitives, with consistent variant/size APIs.
+The supported component set — cards, forms, tables, modals, navigation, notifications — built on Layer 1 tokens and Layer 2 primitives, with consistent variant/size APIs.
 
 > **craft-ux principle:** Extend the repo's existing component library (shadcn/ui etc.) rather than rebuilding from scratch. Each component owns its own variants so callers never reconstruct them with ad-hoc classNames at the call site.
 
@@ -40,10 +40,19 @@ forking. Mechanics live in `layer-2-primitives.md` (CVA, `cn()`, React compositi
 
 ---
 
+## Cards and grouped panels
+
+Read `cards.md` for card anatomy, surface variants, spacing/radius/depth, content alignment,
+media, and interaction semantics. Start there for project, product, feature, metric, action,
+and pricing cards. A card is not just a `rounded border shadow` wrapper, and polish is not a
+requirement to add motion. Use the existing library's card slots/variants when they fit.
+
+---
+
 ## Forms
 
-- Labels **above** inputs. Never floating labels — they fail accessibility and usability at
-  scale.
+- Labels above inputs are a clear default. If using an established floating-label pattern,
+  keep labels visible, programmatically associated, readable, and clear of entered text.
 - Required fields visually indicated (asterisk or "required" text), not by color alone.
 - Inline validation **on blur**, not while typing.
 - Error messages below the field with `role="alert"`.

@@ -35,15 +35,15 @@ The value foundation of the design system. Everything above (primitives, compone
 ## Spacing
 
 **4px base grid.** All spacing values are multiples of 4 — the smallest step (`--space-1`) is 4px,
-and the named scale steps up on an 8px rhythm from `--space-2` onward. No magic numbers. If a spacing
-value isn't on the scale, it's wrong.
+with larger steps for larger groups. Adopt the project scale; optical alignment can justify
+small adjustments. Consistent relationships matter more than rejecting every off-grid pixel.
 
 - Component internal padding: 8, 12, 16, 20, 24
 - Section spacing: 24, 32, 40, 48, 64
 - Page margins: 16 (mobile), 24 (tablet), 32 (desktop)
 - Section gaps on landing pages: 80–120 px between major sections
 
-Token scale (4px grid; named steps follow an 8px rhythm from `--space-2` up):
+Example token scale (4px base, larger steps for larger groups):
 
 ```
 --space-0:  0
@@ -67,7 +67,8 @@ Token scale (4px grid; named steps follow an 8px rhythm from `--space-2` up):
 ## Typography
 
 Clear type hierarchy with defined font-size, line-height, font-weight, and letter-spacing per
-level. Line-height minimum 1.5 for body text, 1.2 for headings.
+level. Body leading often starts at 1.5; large display type can be tighter. Inspect the actual
+font, line lengths, and wrapping rather than applying one minimum to all headings.
 
 Scale (rem):
 
@@ -86,7 +87,7 @@ Scale (rem):
 **Rules:**
 
 - Line length: 45–75 characters (use `max-w-prose` or `max-w-2xl`)
-- Maximum 2–3 typefaces per design — one distinctive display font + one refined body font
+- Usually one or two typefaces; define their roles. A separate display face is optional.
 - No orphaned words on headings — use `text-wrap: balance`
 - Tracking (letter-spacing) is size-specific, never one value for all sizes: large display text
   wants *negative* tracking (~`-0.02em` — letters read too far apart as type grows), body stays
@@ -94,7 +95,7 @@ Scale (rem):
 - Text truncation always uses ellipsis with a tooltip or expand mechanism
 - Use `font-variant-numeric: tabular-nums` for any column of numbers
 - Use the ellipsis character `…` not three periods `...`
-- Use curly quotes `"` `"` not straight quotes
+- Use real typographic quotes (“ ”, ‘ ’) in prose where appropriate; preserve literal code
 - Add non-breaking spaces in measurements (`10&nbsp;MB`), keyboard shortcuts, and brand names
 
 **Distinctive font suggestions** (when not bound by a project system):
@@ -103,24 +104,13 @@ Scale (rem):
   Geist, Outfit, Bricolage Grotesque
 - Body: Source Serif Pro, IBM Plex Sans, Libre Franklin, Work Sans, Plus Jakarta Sans
 
-**Serif discipline.** "Creative / premium brief = serif" is itself an AI default — sans display
-fonts are the default for the same reason black is the default in fashion. Reach for a display
-serif only when the brand brief names one, or the aesthetic is genuinely editorial / luxury /
-publication / heritage *and* you can say why this serif fits this brand. When justified, rotate
-(don't reuse the same serif across consecutive projects) from a pool like: EB Garamond,
-Bodoni Moda, Young Serif, Literata, Spectral, Marcellus — all on Google Fonts. (Playfair
-Display, Cormorant, DM Serif, and Newsreader were dropped from this pool: they sit on the
-training-data-default list that `impeccable` flags for expressive surfaces — one step less
-overused than Fraunces, but on the same trajectory.) **Never default to Fraunces or Instrument
-Serif** — the two LLM-favorite display serifs
-are now as recognizable a tell as Inter (see `anti-patterns.md` → Visual AI Tells). For
-in-headline emphasis, use italic or bold of the *same* family — never inject a serif word into a
-sans headline for visual interest.
+**Choose for the brief.** Preserve a good existing typeface. Serif, sans, or a single family can
+work; personality comes from its relationship to content, scale, weight, and space. Do not ban
+Inter, system fonts, Fraunces, or Instrument Serif by name, or rotate fonts across unrelated projects
+as a requirement. Familiarity is not a defect; an unconsidered, interchangeable composition is.
 
-For the canonical list of fonts to **avoid** (Inter, Roboto, Arial, Fraunces, Instrument Serif —
-overused AI defaults), see `anti-patterns.md` → Visual AI Tells. For **15 ready-to-paste
-pairings by use case** (verified weights, `@import` lines, Tailwind config), see
-`starter-kits.md` → Font pairings.
+For optional pairing examples with imports, see `starter-kits.md`. Verify font availability,
+weights, loading, and license before adding a new font to a project.
 
 ---
 
@@ -137,7 +127,9 @@ circles, and text in buttons often need 1–2 px optical adjustments.
 
 ## Color
 
-All colors through the token system. Never hex, rgb, or palette classes in domain components.
+All colors through the project token system. Raw values belong in the foundation, not scattered
+through domain components. For choosing harmonious colors, distributing them across the page,
+and building surface/state pairs, read `color-and-surfaces.md`; contrast alone is not design.
 
 **Contrast (WCAG 2.2 AA):**
 
@@ -145,7 +137,7 @@ All colors through the token system. Never hex, rgb, or palette classes in domai
 | ------------------------------- | ------------- |
 | Body text                       | 4.5:1         |
 | Large text (18pt+ or 14pt bold) | 3:1           |
-| UI components, icons            | 3:1           |
+| Meaningful UI boundaries/icons | 3:1 against adjacent colors |
 | Focus indicators                | 3:1           |
 
 **Measure the ratio — never eyeball it, and never infer it from a lightness component.** A lightness
@@ -169,80 +161,43 @@ clears the bar as large text, that's a constraint to write down, not a free pass
 alongside the hue — required for color-blind users, and it's also what keeps a status system legible
 when the theme changes.
 
-**Rules:**
+**Roles and states:**
 
-- Interactive states (hover, focus, active, disabled) have distinct, consistent color shifts
-- Disabled states at 40% opacity minimum
-- Selected states visually distinct from hover
-- Focus rings use the design system's ring token
-- 60-30-10 ratio: 60% dominant, 30% secondary, 10% accent
-- One bold accent color maximum
-- Saturation below 80% on accents — desaturate so they blend, don't scream
-- Stick to one gray family (warm or cool, not both)
+- Define hover, focus, pressed, selected, and disabled treatments where applicable. Selection
+  persists and has a non-color cue; it is not just the hover fill left on.
+- Map `accent` to its actual component-library use. In shadcn-style UI it is usually a quiet
+  interaction fill paired with `accent-foreground`, not a second saturated brand color.
+- Keep decorative edges (`border`) separate from control-identifying edges (`input`).
+- Define status text/surface pairs per supported theme. A fixed red, amber, or green is not
+  automatically readable as text, icon, and button fill in both light and dark mode.
+- Choose color strength and distribution from the brief. No universal saturation cap or color
+  percentage establishes quality. See `color-and-surfaces.md` for the process.
 
-For canonical AI color tells (purple/blue gradient on white, pure `#000000`, oversaturated
-accents, mixed gray families) and their fixes, see `anti-patterns.md` → Visual AI Tells.
-
-For **15 contrast-verified starter palettes** (per product type, in these token roles, ready to
-instantiate for greenfield work), see `starter-kits.md` → Starter palettes.
-
-Use HSL (or `oklch` for better gradient interpolation) for easy dark-mode manipulation.
-shadcn-style token set:
-
-```css
-:root {
-  --background: 0 0% 100%;
-  --foreground: 222 47% 11%;
-  --primary: 222 47% 11%;
-  --muted: 210 40% 96%;
-  --muted-foreground: 215 16% 47%;
-  --destructive: 0 84% 60%;
-  --success: 142 76% 36%;
-  --warning: 38 92% 50%;
-  --border: 214 32% 91%;
-  --ring: 222 47% 11%;
-  --radius: 0.5rem;
-}
-
-.dark {
-  --background: 222 47% 4%;
-  --foreground: 210 40% 98%;
-  /* invert remaining tokens with the same hue, adjusted lightness */
-}
-```
+`starter-kits.md` supplies optional full-color examples, including hover and input roles. Match
+those to the target consumer syntax: `var(--primary)` accepts full colors; `hsl(var(--primary))`
+requires HSL channels. Do not mix them. Theme values should be designed and measured as complete
+pairs, not produced by blindly inverting lightness.
 
 ---
 
 ## Border Radius
 
-Consistent system: small for badges/chips, medium for cards/inputs, large for modals/sheets,
-full for avatars/pills. Nested elements use smaller radius than their parent. Never mix rounded
-and sharp corners in the same visual group.
+Use a coherent radius scale suited to the identity and component size. A compact input and a
+large media card may use different steps. Peers should be consistent; nested surfaces need
+optically compatible inner/outer curves. See `cards.md` for the inset relationship.
 
 ---
 
 ## Shadows
 
-Elevation communicates hierarchy.
+Elevation is one way to group and prioritize content, not a requirement for every card. Choose
+outlined, elevated, tonal, or unboxed treatment according to `cards.md`. Border and shadow can
+work together when both are quiet. Neutral or tinted shadows are valid; inspect their appearance
+on the actual canvas. A small contact layer plus a soft ambient layer often gives convincing depth.
+In dark themes, surface and edge contrast usually do more work than black shadows.
 
-- Cards: subtle shadow
-- Dropdowns/popovers: medium shadow
-- Modals: deep shadow with backdrop
-
-Shadows use consistent direction and a tinted color (never pure black). Multi-layer shadows
-create depth; single shadows feel flat. Shadow transitions on hover: 200 ms ease.
-
-In light mode on varied backgrounds, prefer multi-layer shadows over solid borders — they adapt
-via transparency:
-
-```css
-.card {
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.06),
-    0 1px 2px -1px rgba(0, 0, 0, 0.06),
-    0 2px 4px 0 rgba(0, 0, 0, 0.04);
-}
-```
+Keep recipes in theme/component tokens, with stronger elevation for overlays where needed.
+Do not scatter new shadow values across call sites or animate every static panel on hover.
 
 ---
 
@@ -259,8 +214,8 @@ Sizes:
 Stroke width consistent. Button icon gap to label: 8 px. Icon-only buttons: minimum 36 px target
 with `aria-label`.
 
-For icon-metaphor clichés to avoid (rocket for "Launch", shield for "Security") and library
-defaults to flag (Lucide-only as an AI tell), see `anti-patterns.md` → Visual AI Tells.
+Choose recognizable metaphors and consistent stroke/size. An existing Lucide, Phosphor, or
+Heroicons set is valid; replacing it for novelty is not a polish improvement.
 
 ---
 
@@ -304,13 +259,15 @@ Touch target can extend beyond visual boundary via padding.
 
 **Performance rules:**
 
-- ONLY animate `transform` and `opacity` (GPU-accelerated)
-- NEVER animate `width`, `height`, `margin`, `padding`, `top`, `left` (triggers reflow)
+- Prefer `transform` and `opacity` for movement; small color/border/shadow state transitions
+  are also valid. Measure paint-heavy effects; no property alone guarantees smooth delivery.
+- Size/spacing transitions can trigger layout. Prefer transform-based movement; profile necessary
+  size animation and judge observed jank rather than the property name alone.
 - Respect `prefers-reduced-motion`
 - Button feedback: 100–150 ms — must feel instantaneous
-- Spring physics for interactive elements: `type: "spring", stiffness: 100, damping: 20`
-- Stagger list/grid entry with 30–80 ms between items — never mount everything at once
-- No transition on color-scheme change
+- Consider springs for interruptible movement; simple CSS easing is enough for many controls.
+- Stagger only when it helps explain a rare entrance; never delay ordinary worklists or input
+- Prefer an instant theme switch unless a coordinated transition preserves readable pairs throughout
 
 For deeper motion craft (when to animate, custom easing curves, gestures, springs), see
 `layer-5-motion.md`.
@@ -347,8 +304,8 @@ Breakpoints:
 **Rules:**
 
 - Layouts **restructure** at breakpoints — never just shrink
-- Headings scale down proportionally on mobile; body text never drops below 16px (iOS
-  auto-zoom threshold)
+- Headings and body remain readable on mobile; focused form controls generally need at least
+  16px to avoid iOS input zoom. That behavior is not a threshold for every text node.
 - Touch targets increase on mobile
 - No horizontal overflow
 - No content hidden without disclosure

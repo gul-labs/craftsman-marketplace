@@ -129,7 +129,7 @@ updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 ```
 
 - **`created_at`** — set once at insert, never updated. Enforce this with a DB default or an ORM `insertedAt` convention; never let application code omit it.
-- **`updated_at`** — set at insert and refreshed on every update. Options: a DB trigger, an ORM `updatedAt` hook (e.g. Drizzle's `.$onUpdate()`, Prisma's `@updatedAt`), or explicit application-layer writes. Discover which approach the repo uses and match it — mixing triggers and ORM hooks on the same table creates double-updates.
+- **`updated_at`** — set at insert and refreshed on every update. Options: a DB trigger, an ORM `updatedAt` hook (e.g. Drizzle's `.$onUpdate()` for Postgres, Prisma's `@updatedAt` only for other engines), or explicit application-layer writes. Discover which approach the repo uses and match it — mixing triggers and ORM hooks on the same table creates double-updates.
 - Do not use `created_at`/`updated_at` as a soft-delete flag. They are audit columns, not lifecycle columns.
 
 ---
@@ -156,7 +156,7 @@ Choose based on whether the set of values is closed and release-coupled:
 **Use a DB enum when:**
 - The set of values is stable and small (payment statuses: `pending`, `paid`, `refunded`, `failed`).
 - Every new valid value requires a code change anyway — a migration to add the enum value is the right gate.
-- Postgres `ENUM` type, MySQL `ENUM` column, or an application-defined `pgEnum` (Drizzle) / `enum` (Prisma) that maps to the same thing.
+- Postgres `ENUM` type with Drizzle's `pgEnum`, or MySQL `ENUM` with the existing non-Postgres ORM mapping.
 
 **Use a lookup/reference table when:**
 - End users or administrators can add new values at runtime without a deployment.
@@ -202,7 +202,7 @@ amount_cents BIGINT NOT NULL,    -- $12.34 → 1234; arithmetic stays exact in i
 ```
 
 Decide on one approach per project:
-- `NUMERIC(precision, scale)` — exact arithmetic in the DB; most ORMs map this to `Decimal` types (Prisma's `Decimal`, Drizzle's `numeric`). Arithmetic in application code must use a decimal library (e.g. `decimal.js`, Python's `Decimal`) — never `Number` in JavaScript.
+- `NUMERIC(precision, scale)` — exact arithmetic in the DB; use Drizzle's `numeric` mapping for Postgres and a decimal library in application arithmetic (e.g. `decimal.js`, Python's `Decimal`) — never `Number` in JavaScript.
 - Integer minor units — simpler arithmetic, no fractional parts stored, easier to add in application code using plain integers. Requires knowing the currency's scale upfront (EUR: 2 decimal places; KWD: 3; JPY: 0).
 
 Document the approach in a comment on the column or in the schema file. A future developer touching that column should not have to guess.
@@ -239,11 +239,11 @@ Choose the `ON DELETE` strategy deliberately — see `integrity.md` for the full
 
 ## Multi-schema repos and search_path
 
-In Postgres projects that define multiple schemas (via Drizzle's `pgSchema`, Prisma's `dbSchema`, or raw `CREATE SCHEMA`), the `search_path` setting controls which schema is searched for unqualified table names. When the application connection has no `search_path` override that includes the target schema, **any raw SQL literal must use fully-qualified `<schema>.<table>` names.**
+In Postgres projects that define multiple schemas (via Drizzle's `pgSchema` or raw `CREATE SCHEMA`), the `search_path` setting controls which schema is searched for unqualified table names. When the application role has no `search_path` that includes the target schema, **any raw SQL literal must use fully-qualified `<schema>.<table>` names.**
 
 Discover this before writing migrations or raw queries:
-- Does `drizzle.config.ts` / `prisma.schema` reference `pgSchema` or schema prefixes?
-- Does the connection string or pool config set `options: '--search_path=<schema>'`?
+- Does `drizzle.config.ts` reference `pgSchema` or schema prefixes?
+- What `search_path` does the database role set? Do not rely on a connection startup parameter behind a transaction pooler.
 - Are there existing raw migrations that use `<schema>.` prefixes?
 
 If a schema prefix is in use, every `sql` template literal, raw migration statement, and `pg` client query that references those tables must qualify the name. Skipping it either errors (if `search_path` is absent) or silently hits the wrong table in `public`.

@@ -47,30 +47,46 @@ finding violations and building the scanner that blocks them in CI.
 1. **Tokens** — color, spacing, typography as CSS variables + a typed module. → `references/layer-1-tokens.md`
 2. **Primitives & implementation** — `Stack`/`Inline`/`Grid`/`Box` and the Tailwind/`cn()`/CVA
    mechanics every component sits on. → `references/layer-2-primitives.md`
-3. **Components** — the supported set (forms, tables, modals, nav, notifications) with consistent
+3. **Components** — the supported set (cards, forms, tables, modals, nav, notifications) with consistent
    variant/size APIs. → `references/layer-3-components.md`
 4. **States** — loading, empty, error, disabled as first-class. → `references/layer-4-states.md`
 5. **Motion & accessibility** — purposeful motion + the a11y floor. → `references/layer-5-motion.md`
    (three designer deep-dives live in `references/motion/` — Emil, Jakub, Jhey)
 
+## Visual work is a design task
+
+Before composing a new or redesigned surface, read `references/visual-design.md` and establish
+its visual direction. When choosing or changing colors, read `references/color-and-surfaces.md`;
+when cards or tiles are involved, read `references/cards.md`. These are positive design methods,
+not just violation lists. The brief and existing brand take precedence over starter kits and
+style heuristics. No font, hue, icon library, or card shape is defective merely because it is popular.
+
+After a UI build or visual change, perform the rendered acceptance check in `visual-design.md`
+when tooling permits: inspect desktop/mobile, fix observed defects, and inspect the result.
+A full flow audit is separate. Report unavailable rendering honestly; never call a token/lint pass
+proof of beauty. For audit-only requests, report findings without editing the target UI.
+
 ## Reference index
 
 | Task                                                                                                      | Load                                     |
 | --------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| **Visual direction and rendered acceptance** — required for builds, redesigns, and visual polish | `references/visual-design.md` |
+| **Color composition and surface hierarchy** — brand, neutral families, state pairs, theme design | `references/color-and-surfaces.md` |
+| **Cards and tiles** — anatomy, outlined/elevated/tonal/media treatments, spacing, interaction | `references/cards.md` |
 | **Persona, principles, discover-first, standing opinions, hard constraints**                              | `references/foundations.md`              |
 | **Build a design system** from scratch or harden an ad-hoc one — layered architecture, bridge, governance | `references/building-a-design-system.md` |
 | **Audit / enforce design tokens** — find violations, fix by category, build the scanner                   | `references/token-audit.md`              |
 | Spacing, typography, color, radius, shadows, icons, touch targets, motion-timing tokens, breakpoints      | `references/layer-1-tokens.md`           |
-| **Greenfield starter kits** — vetted font pairings + contrast-verified palettes + variation protocol      | `references/starter-kits.md`             |
+| **Greenfield starter kits** — vetted font pairings + contrast-verified palettes + adaptation guidance      | `references/starter-kits.md`             |
 | Layout primitives; Tailwind, `cn()`, CVA, mobile-first, dark mode, hydration safety, perf building blocks | `references/layer-2-primitives.md`       |
-| Forms, tables, modals, navigation, notifications; component anatomy + variant APIs                        | `references/layer-3-components.md`       |
+| Cards, forms, tables, modals, navigation, notifications; component anatomy + variant APIs                        | `references/layer-3-components.md`       |
 | Empty / loading / error / disabled states                                                                 | `references/layer-4-states.md`           |
 | Motion audit framework + accessibility fundamentals                                                       | `references/layer-5-motion.md`           |
 | Emil Kowalski — restraint, speed, springs, clip-path, gestures                                            | `references/motion/emil-craft.md`        |
 | Jakub Krehel — production polish, subtle enter/exit, shadows, optical alignment                           | `references/motion/jakub-polish.md`      |
 | Jhey Tompkins — playful CSS, `linear()`, `@property`, scroll-driven, 3D                                   | `references/motion/jhey-experimental.md` |
 | Fluid gesture physics — velocity handoff, momentum projection, rubberbanding, sheets/drag/swipe           | `references/motion/fluid-gestures.md`    |
-| Page/dashboard architecture, landing sections, Bento, design-intensity calibration                        | `references/composition.md`              |
+| Page/dashboard architecture, landing sections, layout rhythm, purposeful expression                        | `references/composition.md`              |
 | Canonical AI-tells catalog — **what to flag in reviews**                                                  | `references/anti-patterns.md`            |
 | Redesigning existing UI — Scan → Diagnose → Fix                                                           | `references/redesign-audit.md`           |
 | Code-review **structure** + web-interface compliance checklist (static pass)                              | `references/review-protocol.md`          |
@@ -79,20 +95,22 @@ finding violations and building the scanner that blocks them in CI.
 
 ## Standard workflows
 
-| Workflow                     | Mandatory                                  | Add when needed                                                                                                     |
-| ---------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| **Build a design system**    | `foundations` + `building-a-design-system` | `layer-1` for token values, `starter-kits` for greenfield fonts/palettes, `layer-2` for primitives, `token-audit` to add the scanner |
-| **Audit / enforce tokens**   | `token-audit`                              | `layer-1` for the canonical values, `building-a-design-system` for where a value belongs, `anti-patterns` for tells |
-| **Build a component**        | `foundations` + `layer-2`                  | `layer-3` for the pattern, `layer-1` for token values, `layer-4` for its states                                     |
-| **Build a page / dashboard** | `foundations` + `layer-2` + `composition`  | `layer-3` for components, `composition` arsenal for a distinctive aesthetic                                         |
-| **Polish interactions**      | `foundations` + `layer-5`                  | `layer-5` routes to the right designer (`motion/*`); `layer-1` for timing values                                    |
-| **Review code**              | `review-protocol` + `anti-patterns`        | `layer-3` for forms/modals/tables/states, `layer-2` for Tailwind/CVA/hydration/perf, `layer-1` for visual specifics |
-| **Live audit (Pass 2)**      | `live-audit` (after the static review)     | `review-protocol` for the shared severity model + output format; `layer-4` for the empty/loading/error states to force |
-| **Audit motion**             | `layer-5` (routes by context)              | whichever `motion/*` designer reference it weights                                                                  |
-| **Redesign existing UI**     | `redesign-audit` (Scan→Diagnose→Fix)       | `anti-patterns` for the Diagnose pass, `layer-2` + `layer-1` for the Fix pass                                       |
+| Workflow | Mandatory | Add when needed |
+| --- | --- | --- |
+| **Build a design system** | `foundations` + `visual-design` + `color-and-surfaces` + `building-a-design-system` | `layer-1` for scales, `starter-kits` for optional seeds, `layer-2` for primitives, `token-audit` for enforcement |
+| **Audit / enforce tokens** | `token-audit` | `layer-1` for values; `color-and-surfaces` when role/state mapping is in scope |
+| **Build a component** | `foundations` + `visual-design` + `layer-2` + the applicable `layer-3` pattern | `cards` whenever cards/tiles are involved; `color-and-surfaces` for new/changed colors; `layer-4` for applicable states |
+| **Build a page / dashboard** | `foundations` + `visual-design` + `color-and-surfaces` + `composition` | `cards` for cards/tiles, applicable `layer-3` patterns, `layer-1`/`layer-2` for implementation |
+| **Polish visual design** | `foundations` + `visual-design` + affected category (`color-and-surfaces`, `cards`, or `layer-1`) | `redesign-audit` for a broader redesign |
+| **Polish interactions** | `foundations` + `layer-5` | Relevant `motion/*`; visual changes also use `visual-design` |
+| **Review code** | `review-protocol` + `anti-patterns` | `visual-design` for visual scope; `color-and-surfaces`/`cards` for those categories; relevant layer files |
+| **Live audit (Pass 2)** | `live-audit` after static review | `visual-design` for aesthetic judgment; `layer-4` for states |
+| **Audit motion** | `layer-5` | Relevant `motion/*` reference |
+| **Redesign existing UI** | `foundations` + `visual-design` + `redesign-audit` | `color-and-surfaces` for palette/surface work, `cards` for card work, relevant implementation layers |
 
-**Load lazily.** Pull a file only when the task actually asks the question it answers — don't
-preload the "add when needed" column.
+**Load by scope.** A conditional read is required when its condition is present; it is not optional
+because it appears in the last column. Avoid loading unrelated patterns. Existing tokens can serve
+a narrow layout fix without reselecting the whole palette.
 
 ## Pair with project context
 
@@ -124,13 +142,20 @@ Forbidden: `###` headings; `## ID · 🔴 · open` shorthand; severity/status as
 
 - [ ] Run discovery first — locate the token module, layout primitives, and scanner; flag "no layered
       system" or tokens that exist but are bypassed/misused, not just absent → `references/foundations.md`
+- [ ] Evaluate rendered visual quality separately from implementation compliance: hierarchy, color
+      composition, card craft, typography, and identity; mark unavailable visual evidence unverified
+      → `references/visual-design.md`
+- [ ] Check color roles and surface hierarchy, actual hover/selected foreground pairs, and supported
+      themes; don't treat a contrast-passing palette as visual signoff → `references/color-and-surfaces.md`
+- [ ] Review cards/tiles for appropriate containment, anatomy, padding, media crops, aligned actions,
+      proportional radii/depth, and interaction semantics → `references/cards.md`
 - [ ] Audit design tokens for adoption — hardcoded raw palette colors, raw spacing, and structured
       tokens passed where a class string is expected; build/confirm the CI scanner → `references/token-audit.md`
 - [ ] Check visual fidelity against the token scale — off-scale spacing, typography, color, radius,
       shadows, icons, and motion-timing values → `references/layer-1-tokens.md`
-- [ ] Verify state completeness — every route subtree has loading/empty/error boundaries (reason about
-      cascade + layout/provider errors), no populated-only views → `references/layer-4-states.md`
-- [ ] Review component patterns — forms (labels, semantic `type`, autocomplete), modals, tables, nav,
+- [ ] Verify applicable state completeness — data-driven views handle loading/empty/error (reason
+      about framework boundaries and cascades); static content needs no artificial loading screen → `references/layer-4-states.md`
+- [ ] Review component patterns — cards, forms (labels, semantic `type`, autocomplete), modals, tables, nav,
       and notifications for consistent variant/size APIs and missing a11y → `references/layer-3-components.md`
 - [ ] Sweep for AI-tells and dark/technical anti-patterns — `transition-all`, `<div onClick>`,
       `outline-none` with no focus ring, `<img>` without dimensions → `references/anti-patterns.md`
@@ -138,8 +163,8 @@ Forbidden: `###` headings; `## ID · 🔴 · open` shorthand; severity/status as
       just the marketing homepage), and any consent banner offers equally easy accept/decline →
       `references/layer-3-components.md`
 - [ ] Run motion audit protocol — verify `prefers-reduced-motion` is handled, duration/easing tokens
-      are used consistently (not magic numbers), no layout-property animations, ARIA live regions on
-      dynamic content, and no janky animations on low-end hardware → `references/layer-5-motion.md`
+      are used consistently (not magic numbers), appropriate feedback and announcements, and no
+      costly or distracting motion under representative load → `references/layer-5-motion.md`
 - [ ] Run the static review with its grep sweep + Web-Interface Compliance pass against the vendored
       `references/web-interface-guidelines.md` (no review-time network fetch) — severity model
       (Critical / Important / Opportunities → 🔴 / 🟡 / 🟢) from `references/review-protocol.md`;

@@ -25,6 +25,7 @@ browser".
 
 ## Contents
 
+- [Lightweight visual checks versus flow audits](#lightweight-visual-checks-versus-flow-audits)
 - [When to run it](#when-to-run-it)
 - [Tooling](#tooling)
 - [Preflight — gate before you touch the app](#preflight--gate-before-you-touch-the-app)
@@ -38,6 +39,21 @@ browser".
 - [Limitations](#limitations)
 
 ---
+
+## Lightweight visual checks versus flow audits
+
+A build/polish task uses `visual-design.md` for a rendered desktop/mobile check of the changed
+surface. A local static component preview or screenshots need no account, seeded tenant, or full
+flow matrix. The preflight below applies when this deeper audit drives an application and may
+reach stateful flows; it must not block inspection of an inert local specimen.
+
+For a lightweight check, use an inert specimen, an already running preview, supplied screenshots,
+or read-only inspection of the user-requested page. Record the URL/context and do not submit forms
+or change data to obtain a screenshot. Before starting a local preview, inspect the documented
+startup command for migrations, seeding, or outbound side effects. Start an ordinary local UI dev
+server within the authorized build scope; if startup has consequential effects outside that scope,
+use an inert preview or request the missing authorization. Localhost alone does not prove isolation.
+Authenticating, forcing states, or driving stateful flows invokes the deeper preflight below.
 
 ## When to run it
 
@@ -100,9 +116,10 @@ finding in itself, not a reason to push ahead.
 
 ## Setup — boot and orient
 
-1. **Get the app running and the base URL.** Discover the dev command (`package.json` scripts —
-   `dev`/`start`) and the port; if the app isn't up, ask the user to start it (e.g. `! pnpm dev`) and
-   confirm the URL. Never assume `localhost:3000`.
+1. **Get the app running and the base URL.** Discover and inspect the dev command
+   (`package.json` scripts and their startup effects) and the port. Start it within the authorized
+   scope using the lightweight startup rules above, or obtain the missing environment/authorization.
+   Confirm the actual URL; never assume `localhost:3000`.
 2. **Log in as the throwaway account** from preflight (find the test-credential convention — `.env`,
    a seed script, a documented test account). Log in through the actual form — the login screen is
    itself in scope.
@@ -118,6 +135,9 @@ finding in itself, not a reason to push ahead.
 
 These are invisible to source-reading and are the whole reason this pass exists:
 
+- **Aesthetic coherence.** Apply `visual-design.md` to the rendered composition: hierarchy,
+  color distribution, surface depth, card anatomy, type, crop, and responsive rhythm. Passing
+  interaction checks does not establish that the result meets the visual brief.
 - **Contrast in context.** A token may pass a contrast formula in the abstract, but the real defect
   is text over a *gradient*, over an *image*, on a *hover/active* background, or in a *disabled*
   state. Read the rendered colors, not the class names.
@@ -159,7 +179,7 @@ For each cell: drive the interaction, observe, and file any defect with the *con
 
 ## Capturing evidence
 
-- **Screenshot the defect**, not just describe it — a rendered frame is the proof a code citation
+- **Capture a representative page and detail views**, then screenshot each defect, not just describe it — a rendered frame is the proof a code citation
   can't give. Name files for what they show (`onboarding-step2-375-overflow.png`).
 - **Record the flow** with `gif_creator` when the issue is motion/sequence-dependent; capture a few
   frames before and after the action so playback reads cleanly.

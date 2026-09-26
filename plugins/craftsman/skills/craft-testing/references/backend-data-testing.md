@@ -52,42 +52,59 @@ Test the data layer against a **real, ephemeral Postgres**. [Testcontainers](htt
 spins one up in Docker, scoped to the test run, and tears it down after. Starting a container is slow
 (seconds), so start as few as possible: Vitest/Jest `globalSetup` runs **once for the whole run** (in
 the main process, not per worker), so it gives you **one shared container** for every test file.
+Keep this setup in the loopback integration suite (`quality:full`), not unit tests in `quality:ci`.
 Isolate parallel workers with a per-worker schema or database *inside* that one container (strategy 3
 below) — never a container per worker or per test.
 
-Discover the ORM and migration tool from `package.json` before wiring the setup. The shape below is
-the same regardless of ORM; the import paths and migration call differ. The Drizzle example is
-illustrative — adapt to Prisma, Knex, node-pg-migrate, or raw SQL as the repo uses.
+Discover the repo's real migration runner before wiring the setup. For projects adopting the
+Craftsman Postgres profile, the same
+registered chain that production uses must run on the loopback test database, including any
+non-transactional steps. The example assumes a `db:migrate` script that reads
+`DATABASE_URL_DIRECT` and sets session timeouts before `BEGIN`.
 
 ```ts
 // test/db.setup.ts — Vitest globalSetup: ONE shared container for the whole run
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql'
-import { drizzle } from 'drizzle-orm/node-postgres'       // ← adapt to repo's ORM
-import { migrate } from 'drizzle-orm/node-postgres/migrator'  // ← adapt migration runner
-import { Pool } from 'pg'
+import { execFileSync } from 'node:child_process'
+import { assertLoopbackTestUrl } from './assert-loopback'
 
 let container: StartedPostgreSqlContainer
-let pool: Pool
 
 export async function setup() {
-  container = await new PostgreSqlContainer('postgres:16-alpine').start()
-  pool = new Pool({ connectionString: container.getConnectionUri() })
-  // Run the REAL migrations — not a hand-built schema (see "Migrations in tests")
-  await migrate(drizzle(pool), { migrationsFolder: './drizzle' })
-  process.env.TEST_DATABASE_URL = container.getConnectionUri()
+  const major = Number(process.env.POSTGRES_MAJOR) // set to the production major version
+  if (!Number.isInteger(major) || major < 12) throw new Error('POSTGRES_MAJOR is required')
+  container = await new PostgreSqlContainer(`postgres:${major}-alpine`).start()
+  try {
+    const url = assertLoopbackTestUrl(container.getConnectionUri())
+    execFileSync('pnpm', ['db:migrate'], {
+      env: { ...process.env, DATABASE_URL: url, DATABASE_URL_DIRECT: url },
+      stdio: 'inherit',
+    })
+    process.env.TEST_DATABASE_URL = url
+  } catch (err) {
+    await container.stop()
+    throw err
+  }
 }
 
 export async function teardown() {
-  await pool?.end()
   await container?.stop()
 }
 ```
 
-No Docker available (some CI tiers, local sandboxes)? The fallbacks, in order: a disposable database
-on a real Postgres service (`CREATE DATABASE test_<runid>`), or an in-memory Postgres like
-[pglite](https://github.com/electric-sql/pglite) for pure data-layer tests. **SQLite is not a
+No Docker available (some CI tiers, local sandboxes)? Start a throwaway local Postgres cluster at
+the production major version with `initdb`/`pg_ctl`, bound to a free loopback port under a temp
+directory; the test script starts and stops it. An in-memory Postgres like
+[pglite](https://github.com/electric-sql/pglite) can cover pure relational semantics, but not
+pool, driver, timeout, lock, or migration-runner behavior. Never use a remote host, even a "test"
+database on a shared cluster. **SQLite is not a
 substitute** — its type coercion, lack of real `jsonb`, and different constraint semantics hide the
 bugs you're testing for. The DB under test must be the same engine as production.
+
+What a test may connect to (loopback only, never a shared or production host) and the standard
+database suites T1–T8 (pool config, URL guards, transaction helper, migrations, connection-loss
+resilience) are owned by **`craft-db`** → `seeding-and-testing.md`. PGlite is single-connection:
+use it for relational semantics, never to prove pool, driver, timeout or lock behaviour.
 
 ---
 
@@ -140,27 +157,13 @@ it('inserts a user and the row is visible within the transaction', async () => {
 })
 ```
 
-```ts
-// Prisma — $transaction with forced rollback
-import { afterEach, beforeEach } from 'vitest'
-import { PrismaClient } from '@prisma/client'
+For Prisma on a non-Postgres project, prefer the truncate or isolated-database
+strategy below unless a transaction fixture has been proven against the installed
+Prisma version. Do not `await prisma.$transaction(callback)` in `beforeEach`
+while its callback waits for `afterEach`: the test body can never start.
+Projects adopting the Craftsman Postgres profile use pg + Drizzle.
 
-let tx: Awaited<Parameters<Parameters<PrismaClient['$transaction']>[0]>[0]>
-let afterEachReject: (e: Error) => void
-
-beforeEach(async () => {
-  await prisma.$transaction(async (t) => {
-    tx = t
-    await new Promise((_, reject) => {
-      afterEachReject = reject  // stored so afterEach can trigger the rollback
-    })
-  }).catch(() => {}) // swallow the forced rejection
-})
-afterEach(() => afterEachReject(new Error('rollback')))
-// the test uses `tx` as its prisma handle, NOT the global `prisma`
-```
-
-Fastest by far, but with two real limits: (a) the **code under test must accept the transaction
+Rollback is fast, but has two real limits: (a) the **code under test must accept the transaction
 handle** — if a handler opens its *own* connection from the pool, it won't see `tx`'s uncommitted
 rows, and the test is meaningless. (b) you **cannot test code that itself commits or uses nested
 transactions** the same way — use savepoints, or fall to the truncate strategy below.
@@ -181,7 +184,10 @@ afterEach(async () => {
 **3. Per-worker database (or schema) for parallelism.** Vitest/Jest run files in parallel workers; if
 they share one DB they collide. Inside the single shared container, give each worker its own database
 (`CREATE DATABASE test_${VITEST_WORKER_ID}`) or its own Postgres schema (`SET search_path`) — one
-container, N isolated namespaces, not N containers. Combine with rollback/truncate *within* a worker.
+container, N isolated namespaces, not N containers. Validate the worker ID before using it in an
+identifier, then apply the exact registered migration chain to **each** worker database/schema
+before its tests start. Migrating only the container's default database leaves worker namespaces
+empty. Combine with rollback/truncate *within* a worker.
 This is what makes a real-DB suite both parallel and isolated.
 
 **Pick:** rollback for the bulk of data-layer tests (speed), truncate for handlers that manage their
@@ -398,12 +404,10 @@ source of truth that silently drifts: someone adds a migration that backfills a 
 longer has. Running migrations in setup means **schema drift is caught** — a broken or out-of-order
 migration fails the test run, not the deploy.
 
-```ts
-// in the testcontainers setup above:
-await migrate(drizzle(pool), { migrationsFolder: './drizzle' }) // Drizzle
-// Prisma:  execSync('prisma migrate deploy', { env: { DATABASE_URL: uri } })
-// node-pg-migrate / Flyway / raw: run the same command CI/prod runs
-```
+The setup above invokes the repo's `db:migrate` script on `DATABASE_URL_DIRECT` after asserting the
+URL is loopback. Use that exact runner and registered migration chain in T6, including steps such
+as `CREATE INDEX CONCURRENTLY` that run outside a transaction. Do not call the ORM migrator directly
+from the test harness if the production runner does more work.
 
 This also turns the migration itself into something tested: if a migration won't apply to a clean DB,
 or a `NOT NULL` added without a default breaks on existing-shaped data, you find out in CI. For
@@ -428,23 +432,33 @@ under test so every write goes through the same transaction.
 ```python
 # conftest.py
 import os
+import ipaddress
+from urllib.parse import urlsplit
 import pytest
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
-from app.db import Base
 
 @pytest.fixture(scope="session")
 def engine():
-    # Point at an ephemeral test database (testcontainers or a disposable pg instance)
-    eng = create_engine(os.environ["TEST_DATABASE_URL"])
+    # The fixture owns this disposable loopback DB; never migrate a shared URL.
+    url = os.environ["TEST_DATABASE_URL"]
+    parsed = urlsplit(url)
+    try:
+        loopback = ipaddress.ip_address(parsed.hostname or "").is_loopback
+    except ValueError:
+        loopback = False
+    if (not loopback or parsed.query or parsed.fragment or
+            os.environ.get("TEST_DATABASE_DISPOSABLE") != "1"):
+        raise RuntimeError("tests require an owned disposable loopback database")
+    eng = create_engine(url)
     # Run the REAL migration files — not hand-built DDL (see "Migrations in tests" above)
     alembic_cfg = Config("alembic.ini")
-    alembic_cfg.set_main_option("sqlalchemy.url", os.environ["TEST_DATABASE_URL"])
+    alembic_cfg.set_main_option("sqlalchemy.url", url)
     command.upgrade(alembic_cfg, "head")
     yield eng
-    Base.metadata.drop_all(eng)  # OK to hand-tear-down; only setup must use real migrations
+    eng.dispose()  # the container/disposable cluster owns final database teardown
 
 @pytest.fixture
 def session(engine):
@@ -612,5 +626,5 @@ Flag with `file:line` and the fix:
 | Test hits real Stripe / SendGrid / S3 | Mock the third-party HTTP at the boundary (MSW/nock); keep your client + retry logic real |
 | Own billing/email module mocked instead of the network | Mock only what you don't own; mocking your module erases the code under test |
 | Retry/idempotency/outbox logic with no behavior test | Drive a duplicate/failed delivery; assert exactly one persisted effect |
-| Test schema hand-built or `db.push`'d | Run the real migration files in setup so schema drift fails the suite, not the deploy |
+| Test schema hand-built, `db.push`'d, or migrated by a test-only path | Run the exact registered chain through the real runner on loopback Postgres |
 | Data-transforming migration with no test | Seed the old shape, run the migration, assert the new shape before it touches real rows |

@@ -12,8 +12,8 @@ undetected, and making recovery deterministic when something gets through anyway
 > those jobs run, secrets injection, and deploy gates. Missing e2e suite → TEST finding; e2e not
 > wired into CI → INFRA finding. How the build is made reproducible and what an immutable artifact
 > looks like belongs to `build-release.md`. How config and secrets flow into the pipeline belongs to
-> `config.md`. Where DB migrations run in a deploy is here (the insertion point) but the migration
-> semantics — backward compatibility, zero-downtime column changes — belong to **`craft-db`** →
+> `config.md`. The release ordering around a separately applied Postgres migration is here;
+> migration mechanics and semantics — backward compatibility, zero-downtime column changes — belong to **`craft-db`** →
 > `migrations.md`. The vulnerability scanner that runs as a required gate is referenced here (it
 > blocks merge), but triage thresholds and suppression rules are in **`craft-security`** →
 > `supply-chain.md`. Post-deploy error-rate gates and deploy markers belong to
@@ -25,7 +25,7 @@ undetected, and making recovery deterministic when something gets through anyway
 
 - [Required gates before merge](#required-gates-before-merge)
 - [Gate ordering: fail fast, fail cheap](#gate-ordering-fail-fast-fail-cheap)
-- [Where migrations run in the pipeline](#where-migrations-run-in-the-pipeline)
+- [Where migrations fit in the release sequence](#where-migrations-fit-in-the-release-sequence)
 - [Deploy automation and the no-manual-edit rule](#deploy-automation-and-the-no-manual-edit-rule)
 - [Rollback: one step per deploy path](#rollback-one-step-per-deploy-path)
 - [Roll back first, diagnose after](#roll-back-first-diagnose-after)
@@ -118,17 +118,19 @@ Practical rules:
 
 ---
 
-## Where migrations run in the pipeline
+## Where migrations fit in the release sequence
 
-For standard backward-compatible schema changes, the default safe insertion point is: **after the
-new build is verified and before traffic switches to the new code.** Running them before the build
-is verified risks schema drift against a rolled-back deploy; running them after traffic switches
-creates a window where new code runs against an old schema.
+For standard backward-compatible schema changes, apply the migration **after the new artifact is
+verified and before traffic switches to the new code.** Running it before verification risks schema
+drift against a rolled-back deploy; running it after traffic switches creates a window where new
+code runs against an old schema. For Postgres, invocation is a separate human-run `db:migrate`
+command or a manually dispatched workflow, on `DATABASE_URL_DIRECT` with the migration role,
+staging first. It is never an automatic deploy, build, boot, or `quality:ci` step.
 
 ```
 [Build artifact verified]
     │
-    ├─ run migrations    ← default insertion point for additive, backward-compatible changes
+    ├─ apply migrations ← separate manual command or workflow_dispatch for Postgres
     │                      (new schema, old code still serving)
     │                      migrations MUST be backward-compatible with the OLD code
     │
@@ -144,7 +146,7 @@ This ordering requires migrations to be **backward-compatible**: the new schema 
 old code during the overlap window. That means column additions before column removals, additive
 changes first, destructive removals deferred to a later deploy. The migration semantics —
 expand/contract, zero-downtime techniques, column rename patterns — live in **`craft-db`** →
-`migrations.md`. The insertion point in the pipeline is here.
+`migrations.md`. The release ordering is shown here; Postgres migration execution remains separate.
 
 **Caveats for multi-phase and online migrations:**
 
@@ -164,19 +166,21 @@ expand/contract, zero-downtime techniques, column rename patterns — live in **
   code change) and validated before the dependent code ships — are the right tool for high-risk or
   long-running schema changes. The pipeline structure is the same; the payload is migration-only.
 
-Never run migrations manually in production. They run as a pipeline step, logged and gated on
-success — a failed migration exits the pipeline and leaves the old code serving (or in a partially
-applied state that must be diagnosed and resolved, not silently ignored).
+Do not edit production schema with ad hoc SQL. For Postgres, run the repo's reviewed `db:migrate`
+command or manually dispatched workflow; retain its log and verify success before the dependent
+code deploys. A failed migration leaves the old code serving (or a partially applied state that
+must be diagnosed and resolved, not silently ignored). The deploy should check that its required
+schema version is present, failing closed if the migration has not been applied.
 
 ---
 
 ## Deploy automation and the no-manual-edit rule
 
 **Manual production edits are the failure mode, not the workflow.** They are untracked, unreviewable,
-and unrollbackable. The standard: every change to the running production environment travels through
-the pipeline.
+and unrollbackable. Code and configuration changes travel through the deployment pipeline. Postgres
+schema changes use the separate, reviewed `db:migrate` path described above, with an apply log.
 
-- **Deploys trigger from the pipeline**, not from a developer SSH session or a platform dashboard
+- **Code deploys trigger from the pipeline**, not from a developer SSH session or a platform dashboard
   button pressed ad hoc. A commit to the deploy branch (e.g. `main`) triggers the pipeline, which
   runs gates, then deploys.
 - **The deploy step uses the artifact the build step produced** — the same binary, image, or bundle
@@ -219,18 +223,19 @@ jobs:
       - name: Download build artifact
         # restore the artifact that passed the gates — do not rebuild
 
-      - name: Run migrations
-        # backward-compatible schema changes first
+      - name: Verify required schema version
+        # Postgres migration is applied separately through db:migrate or workflow_dispatch
 
       - name: Deploy artifact
         # platform CLI / API (fly deploy, vercel deploy, ecs update-service, ...)
 
       - name: Verify health
-        # GET /health and /ready; fail the job (and trigger rollback) if non-200
+        # GET /health/live and protected /health/ready; fail and trigger rollback if unhealthy
 ```
 
-The ordering — gates → migrations → artifact deploy → health check — is the same regardless of
-platform. The platform-specific commands vary; the ordering does not.
+The ordering is verified artifact → separately applied Postgres migration when needed → schema
+version check → artifact deploy → health check. The commands vary by platform; never let an
+automatic deploy implicitly run the Postgres migration.
 
 ---
 
@@ -274,7 +279,7 @@ Automation that can deploy can also verify. After every production deploy, befor
 complete:
 
 1. **Hit the health and readiness endpoints** programmatically from the pipeline. A `200` from
-   `/health` and `/ready` (or the repo's equivalent) confirms the new instance started, connected
+   `/health/live` and protected `/health/ready` for Postgres (or the repo's equivalent) confirms the new instance started, connected
    to its dependencies, and is ready to serve. A failed probe should halt the pipeline and trigger
    rollback before traffic fully ramps — zero-downtime platforms with a readiness check do this
    natively. Health and readiness probe design: `craft-infra` → `runtime-health.md`.
@@ -307,7 +312,6 @@ jobs:
       - name: Deploy to production
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          DATABASE_URL:  ${{ secrets.DATABASE_URL }}
         run: fly deploy --remote-only
 ```
 
@@ -390,12 +394,13 @@ The schema that *declares which vars are required* is in `config.md`. This secti
 | No dependency vulnerability scan in the pipeline | Wire one scanner as a required check (`craft-security` → `supply-chain.md`) |
 | Scanner runs but exits 0 on critical/high findings | Pass the severity-threshold flag so it exits non-zero on critical/high |
 | Migrations run after traffic switches to new code | Migrations run before the deploy swap; they must be backward-compatible with the old code |
-| Migrations applied manually in production | All migrations run as pipeline steps, gated on success |
+| Postgres migration run automatically in build, boot, ordinary CI, or deploy | Use a separately reviewed `db:migrate` command or `workflow_dispatch` on `DATABASE_URL_DIRECT`, staging first |
+| Production schema changed with ad hoc SQL instead of the registered runner | Run the repo's reviewed migration chain and retain its apply log |
 | Deploy step rebuilds from source (not from the gated artifact) | Download and deploy the artifact the build job produced |
 | No rollback command documented next to the deploy command | Document the one-step rollback command per deploy mechanism |
 | Code rollback fails because migration was destructive | Enforce backward-compatible schema changes; defer drops to a later deploy (`craft-db` → `migrations.md`) |
 | Team hotfixes forward on a broken deploy instead of rolling back first | Roll back immediately using the documented one-step command; diagnose against the reverted, stable state |
 | No status page during an incident; users flood support/inbox | Stand up a free hosted status page (Instatus, Statuspage.io free tier, or a static page) before launch |
 | Manual prod edits (SSH, dashboard config edits, hot-patching) | All changes travel through the pipeline; config changes redeploy via `config.md` |
-| No health/readiness probe check after deploy | Hit `/health` and `/ready` from the post-deploy job; fail and rollback if non-200 (`craft-infra` → `runtime-health.md`) |
+| No health/readiness probe check after deploy | Hit `/health/live` and protected `/health/ready` from the post-deploy job; fail and rollback if unhealthy (`craft-infra` → `runtime-health.md`) |
 | No deploy marker emitted to observability backend | Emit commit SHA + timestamp on every deploy (`craft-observability` → `slo-alerts.md`) |
