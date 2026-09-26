@@ -76,13 +76,19 @@ primary_region = "lax"
     grace_period = "5s"
     interval     = "15s"
     method       = "GET"
-    path         = "/health"
+    path         = "/health/live"
     port         = 8080
     timeout      = "2s"
     type         = "http"
 ```
 
-Secrets: `fly secrets set DATABASE_URL="postgres://..."` — stored encrypted in Fly's secret store, injected as env vars at runtime. Never in `fly.toml`.
+Secrets: `fly secrets set DATABASE_URL="postgres://..."` — stored encrypted in Fly's secret store, injected as env vars at runtime. Never in `fly.toml`. For Postgres, keep this native unauthenticated probe on `/health/live`; monitor the protected `/health/ready` separately with `HEALTH_MONITOR_SECRET`.
+
+These native `/health/live` examples check process availability. A separate protected readiness
+monitor alerts on a database failure but **does not remove an instance from traffic**. If the
+deployment requires dependency-based routing, wire `/health/ready` through a provider-supported
+private or authenticated readiness mechanism and verify a failing probe stops new requests.
+Do not publish DB details or pool counts to make a public native health check serve as readiness.
 
 ### Render — `render.yaml`
 
@@ -98,7 +104,7 @@ services:
     plan: starter
     buildCommand: npm ci && npm run build
     startCommand: node dist/server.js
-    healthCheckPath: /health
+    healthCheckPath: /health/live
     envVars:
       - key: NODE_ENV
         value: production
@@ -124,7 +130,7 @@ Railway's config file for service settings, build configuration, and deploy opti
 
 [deploy]
   startCommand = "node dist/server.js"
-  healthcheckPath = "/health"
+  healthcheckPath = "/health/live"
   healthcheckTimeout = 100
   restartPolicyType = "on_failure"
   restartPolicyMaxRetries = 3

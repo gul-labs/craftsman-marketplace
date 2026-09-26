@@ -78,8 +78,9 @@ or bare "Loading" (truncated-feeling).
 
 ### Perceived performance
 
-A spinner that rotates at a confident speed (not too slow) makes the app feel faster even when load
-time is identical. Perceived performance is real performance.
+Respond immediately to the action, preserve useful content, and show honest pending/progress state.
+Do not speed up a spinner to imply faster processing or add artificial delays. Respect reduced
+motion and measure actual responsiveness separately from the visual treatment.
 
 ---
 

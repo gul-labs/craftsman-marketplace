@@ -41,103 +41,46 @@ working behavior. Not a rewrite — a targeted upgrade.
 
 ### 1. Scan
 
-Read the codebase. Identify:
-
-- Framework (Next.js, Vite, plain HTML, etc.)
-- Styling method (Tailwind, vanilla CSS, styled-components, CSS modules)
-- Current design patterns
-- Component library in use
-- Token/theme system (if any)
+Inspect the actual page or current screenshots before deciding what looks wrong. Read the brief,
+brand assets, framework, styling system, component library, tokens, and relevant source. Record
+what must be preserved. A narrow polish request does not authorize replacing a coherent identity.
 
 ### 2. Diagnose
 
-Run the full anti-pattern catalog from `anti-patterns.md` against the codebase. Walk
-through each section:
+Use the acceptance dimensions in `visual-design.md`: hierarchy, color, cards, type, composition,
+and details. Separate observed visual problems from code-only suspicions. An inaccessible render
+is a limitation to report, not permission to invent visual findings.
 
-- Visual AI Tells (color, typography, layout, depth)
-- Content Anti-Patterns
-- UX Anti-Patterns
-- Technical Anti-Patterns
-- Mobile Anti-Patterns
-- Strategic Omissions
-- Composition Anti-Patterns
-- Code Quality Anti-Patterns
+Consult `anti-patterns.md` after forming the visual assessment. Its style heuristics are contextual;
+a popular font or three-column grid is not a defect by itself. Check functional/accessibility
+issues through `review-protocol.md` and the relevant layer references.
 
-Emit findings with `file:line` for every violation. Use the severity buckets from
-`review-protocol.md` (Critical / Important / Opportunities). **Emission path depends on context**
-(same dual-emission rule as `review-protocol.md` → Output Format): under `craft-audit` / writing
-`.craftsman/**/findings.md` → canonical workspace findings only; standalone redesign review →
-punch-list tables/chat.
+Every finding names the affected element, actual consequence, and source location where available.
+Under `craft-audit`, preserve canonical workspace findings; standalone redesigns may use the
+review-protocol punch list. A material miss against the requested visual brief is Important in a
+polish/redesign task even when the buttons still function.
 
-### 3. Fix
+### 3. Fix the cause
 
-Apply targeted upgrades working with the existing stack. Do not rewrite from scratch.
+Prioritize the observed problems, not a fixed sequence of fashionable replacements:
 
-Use the **Upgrade Techniques** below to replace specific generic patterns with stronger ones.
-For canonical spacing/typography/color values consult `layer-1-tokens.md`. For
-implementation patterns (Tailwind, dark mode, hydration) consult `layer-2-primitives.md`.
+1. Repair broken flows, unreadable content, and accessibility failures.
+2. Establish the main hierarchy and page proportions so content has a clear reading order.
+3. Correct color roles and surface relationships with `color-and-surfaces.md`.
+4. Refine affected cards using `cards.md`: padding, media, typography, corners, depth, actions.
+5. Tune type scale, wrapping, density, and responsive grouping using `layer-1-tokens.md`.
+6. Complete meaningful states and feedback; add motion only when it explains an interaction.
 
----
+Do not automatically swap fonts, remove every border, add noise, or introduce glass/parallax.
+A good font with bad spacing needs better spacing. A weak card needs a better card, not a tilt effect.
+Work with the existing stack and component system; keep the change focused on the diagnosed cause.
 
-## Upgrade Techniques
+### 4. Verify the result
 
-High-impact patterns to replace generic ones.
-
-### Typography upgrades
-
-- **Variable font animation** — interpolate weight or width on scroll/hover
-- **Outlined-to-fill transitions** — text starts as stroke, fills with color on scroll entry
-- **Text mask reveals** — typography as a window to video or animated imagery behind it
-- **Distinctive display + body pairing** — Space Grotesk + Plus Jakarta Sans, Cabinet Grotesk +
-  IBM Plex, etc. See `layer-1-tokens.md` → Typography for the pool, the serif-discipline rule,
-  and why Fraunces / Instrument Serif are no longer recommended (they became the AI-default
-  serifs — see `anti-patterns.md` → Visual AI Tells).
-  <!-- Inter Tight was removed: it is a condensed variant of the Inter family, which anti-patterns.md
-       bans as a default AI font tell. Replaced with Plus Jakarta Sans as an equivalent sans-serif
-       body pairing that is not in the Inter family. -->
-  <!-- Fraunces was removed as the display example: taste-skill v2 production tests (2026) showed
-       Fraunces + Instrument Serif became the two LLM-default display serifs — the new Inter. -->
-
-### Layout upgrades
-
-- **Broken grid / asymmetry** — elements deliberately overlap or bleed off-screen
-- **Whitespace maximization** — force focus on a single element
-- **Parallax card stacks** — sections stick and stack on scroll
-- **Split-screen scroll** — halves move opposite directions
-- **Bento grid** — asymmetric tiles; see `composition.md` for the Bento 2.0 baseline. See
-  composition.md § Bento 2.0 for the token-mapping note.
-
-### Motion upgrades
-
-Common upgrade moves:
-
-- **Smooth scroll with inertia** — cinematic feel
-- **Staggered entry** — cascade with 30–80 ms delays + Y-axis + opacity
-- **Spring physics** — replace linear easing
-- **Scroll-driven reveals** — expanding masks, draw-on SVG paths
-
-### Surface upgrades
-
-- **True glassmorphism** — `backdrop-filter: blur` + 1 px inner border + inner shadow (not just
-  blur)
-- **Spotlight borders** — card borders illuminate under cursor
-- **Grain/noise overlays** — `fixed pointer-events-none` pseudo-element
-- **Colored, tinted shadows** — carry the hue of the background; multi-layer recipe in
-  `layer-1-tokens.md` → Shadows
-
----
-
-## Fix Priority Order
-
-Apply changes in this order for maximum visual impact with minimum risk:
-
-1. **Font swap** — biggest instant improvement, lowest risk
-2. **Color palette cleanup** — remove clashing or oversaturated colors
-3. **Hover and active states** — makes interface feel alive
-4. **Layout and spacing** — proper grid, max-width, consistent padding
-5. **Replace generic components** — swap cliche patterns for modern alternatives
-6. **Add loading, empty, and error states** — makes it feel finished
-7. **Polish typography scale and spacing** — the premium final touch
+Render desktop/mobile and affected themes/states. Compare against the starting view and brief;
+check `visual-design.md` acceptance, repair observed defects, and inspect the changed result.
+For an authenticated flow audit, use `live-audit.md` separately. Run the relevant existing checks
+for changed behavior. Report exactly which renders and interactions were verified.
 
 ---
 

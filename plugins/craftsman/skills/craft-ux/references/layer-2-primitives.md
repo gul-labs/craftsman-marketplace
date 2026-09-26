@@ -2,7 +2,8 @@
 
 Layout primitives (Stack/Inline/Grid/Box) and the Tailwind/CVA mechanics every component sits on. Replaces raw flex/gap divs and ad-hoc class soup.
 
-> **craft-ux tie-in:** Prefer the repo's existing primitives/implementation conventions when present; introduce primitives only where missing.
+> **craft-ux tie-in:** Reuse existing primitives and styling conventions. In a small page without
+> them, token-based CSS Grid/Flexbox is valid; introduce abstractions when repeated patterns warrant it.
 
 > **See also**
 >
@@ -47,9 +48,10 @@ Layout primitives (Stack/Inline/Grid/Box) and the Tailwind/CVA mechanics every c
 
 Five structural components enforce the spacing scale through the type system. At 50+ pages they eliminate drift that tokens alone cannot prevent — tokens exist but a developer can still write `space-y-5`. Primitives make invalid spacing impossible.
 
-All primitives are thin wrappers (~15–25 lines each): className mapping, `as` prop for semantic HTML, ref forwarding, no internal state, no side effects. Zero runtime overhead.
+All primitives are thin wrappers (~15–25 lines each): className mapping, `as` prop for semantic HTML, ref forwarding, no internal state, no side effects. Keep abstraction overhead proportionate to the project.
 
-**Prohibited in domain components:** raw `space-y-*`, `flex items-center gap-*`, `grid grid-cols-*`, layout `p-*`.
+**Where the project mandates these primitives:** use them instead of raw layout utilities in
+domain components. Without that convention, consistent token-based layout utilities are valid.
 
 ---
 
@@ -160,10 +162,10 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        default: "bg-primary text-primary-foreground hover:bg-primary-hover",
         destructive:
-          "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        outline: "border border-input bg-background hover:bg-accent",
+          "bg-destructive text-destructive-foreground hover:bg-destructive-hover",
+        outline: "border border-input bg-background text-foreground hover:bg-accent hover:text-accent-foreground",
         ghost: "hover:bg-accent hover:text-accent-foreground",
       },
       size: {
@@ -179,6 +181,11 @@ const buttonVariants = cva(
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> &
   VariantProps<typeof buttonVariants>;
 ```
+
+The example assumes `primary-hover` and `destructive-hover` are mapped into the utility theme.
+Use the existing system's equivalent roles; `starter-kits.md` provides measured example pairs.
+Do not copy a class whose token is missing, or use an opacity hover without measuring the composed
+text/fill pair. `accent` is a quiet interaction surface; it always travels with its foreground.
 
 ---
 
@@ -383,15 +390,15 @@ function LocalTime({ date }: { date: Date }) {
 | Critical fonts         | `<link rel="preload" as="font" crossOrigin>` + `font-display: swap`                |
 | Long lists             | Virtualize at > 50 items (TanStack Virtual or equivalent)                          |
 | Layout reads in render | Batch with writes; never call `getBoundingClientRect` in render                    |
-| Animatable properties  | `transform` and `opacity` only                                                     |
+| Animatable properties  | Prefer `transform`/`opacity` for movement; small color/edge state transitions are valid                                                     |
 
 ---
 
 ### Animation under Load
 
-Animate only **compositor-friendly properties — `transform` and `opacity`** (Framer Motion's
+For movement, prefer **compositor-friendly properties — `transform` and `opacity`** (Framer Motion's
 `x`/`y`/`scale`/`opacity` shorthands compile down to these). Animating layout properties (`width`,
-`height`, `top`, `margin`) forces layout + paint every frame and is the real jank source.
+`height`, `top`, `margin`) can force layout and paint each frame; profile before declaring it the cause of jank.
 
 But the property isn't the whole story: a **JS-driven** animation computes each frame on the main
 thread via `requestAnimationFrame`, so it can still stutter when the main thread is blocked — no

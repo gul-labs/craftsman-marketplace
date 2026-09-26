@@ -39,7 +39,7 @@ Set a timeout on every outbound call at every layer:
   }
   ```
 
-- **Database clients:** ORM/driver-level query timeouts prevent a slow query from holding a connection indefinitely. Check `package.json` for the ORM or driver the repo already uses (common options: Drizzle, Prisma, raw `pg`), then set the statement/query timeout separately from the connection-acquire timeout — they are not the same knob. Consult the driver docs for the exact option names.
+- **Database clients:** For Postgres, use the role's `statement_timeout` default and transaction-local limits as the server-side authority; `pg`'s `query_timeout` is a client backstop, not a replacement. Keep the connection-acquire timeout separate from either query limit. A timeout sent as a startup parameter may be dropped by a transaction pooler, and a plain session `SET` may leak to another client. The connection pattern and transaction deadline are in `craft-db` → `connection-pooling.md`. For another database engine, verify its own timeout behavior.
 
 - **Queue and stream consumers:** set a visibility timeout (SQS) or a processing deadline; don't let a stalled consumer hold a message invisible forever while nothing processes it.
 

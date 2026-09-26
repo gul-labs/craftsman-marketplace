@@ -58,7 +58,8 @@ never to decorate.
 
 ## Review Format (Required When Auditing)
 
-Use a `| Before | After | Why |` table. One row per issue. Never use a prose list.
+For a standalone focused motion review, a `| Before | After | Why |` table is useful. Under
+craft-audit, the canonical findings format takes precedence; see `../review-protocol.md`.
 
 | Before                                | After                                                             | Why                                                         |
 | ------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------- |
@@ -78,13 +79,13 @@ Answer these four questions before writing animation code.
 
 | Frequency                                                    | Decision                     |
 | ------------------------------------------------------------ | ---------------------------- |
-| 100+ times/day (keyboard shortcuts, command palette toggle)  | No animation. Ever.          |
+| 100+ times/day (keyboard shortcuts, command palette toggle)  | Usually instant; preserve clear feedback          |
 | Tens of times/day (hover effects, list navigation)           | Remove or drastically reduce |
 | Occasional (modals, drawers, toasts)                         | Standard animation           |
 | Rare / first-time (onboarding, feedback forms, celebrations) | Can add delight              |
 
-> Never animate keyboard-initiated actions. Raycast has no open/close animation — that is the
-> correct answer for anything used hundreds of times a day.
+Keyboard use is a strong reason to minimize delay, not a blanket ban on all transitions. Focus
+and feedback must be immediate; repeated commands should not wait for decorative movement.
 
 ### 2. What is the purpose?
 
@@ -94,7 +95,7 @@ Valid purposes:
 - **State indication** — morphing feedback button communicates the change
 - **Explanation** — marketing animation showing how a feature works
 - **Feedback** — button scales down on press, confirming input was received
-- **Preventing jarring changes** — elements appearing without transition feel broken
+- **Preventing jarring changes** — preserve orientation when a substantial spatial change would confuse
 
 If the purpose is "it looks cool" and users see it often, don't animate.
 
@@ -103,7 +104,7 @@ If the purpose is "it looks cool" and users see it often, don't animate.
 ```
 Entering view?                           → ease-out (starts fast, feels responsive)
 Exiting view, long (≥ 150 ms)?           → ease-out or ease-in-out
-Exiting view, short (< 150 ms)?          → ease-in acceptable (brief fast-start reads natural)
+Exiting view, short (< 150 ms)?          → ease-in acceptable (brief exit reads natural)
 Moving/morphing on-screen?               → ease-in-out (natural acceleration/deceleration)
 Hover / color change?                    → ease
 Constant motion (marquee)?               → linear
@@ -113,10 +114,11 @@ Default                                  → ease-out
 > Avoid `ease-in` for entering animations and for any animation longer than 150 ms. Ease-in
 > delays initial movement — exactly when the user is watching most closely. A dropdown entering
 > with `ease-in` at 300 ms _feels_ slower than `ease-out` at 300 ms. Exception: `ease-in` on
-> quick exits (< 150 ms) is acceptable — the element is leaving, and a brief fast-start exit
+> quick exits (< 150 ms) is acceptable — the element is leaving, and a brief exit
 > reads naturally.
 
-Use custom curves. Built-in CSS easings lack punch:
+Use a shared curve that fits the interaction. Built-in easing is valid; these custom curves are
+options when the rendered motion benefits from a different response:
 
 ```css
 --ease-out: cubic-bezier(0.23, 1, 0.32, 1); /* Strong ease-out for UI interactions */
@@ -136,8 +138,8 @@ Resources: [easing.dev](https://easing.dev/) · [easings.co](https://easings.co/
 | Modals, drawers          | 200–500 ms    |
 | Marketing/explanatory    | Can be longer |
 
-> UI animations stay under 300 ms. A fast-spinning spinner makes the app feel faster even when
-> load time is identical. `ease-out` at 200 ms _feels_ faster than `ease-in` at 200 ms.
+Keep frequent UI feedback brief. Larger surfaces may need longer travel; the table is a starting
+range, not a universal ceiling. Never accelerate a spinner just to imply faster real progress.
 
 ---
 
@@ -199,7 +201,8 @@ animate on mouse move.
 }
 ```
 
-Apply to any pressable element. Scale should be subtle (0.95–0.98).
+Use scale selectively on controls large enough to retain legibility. A color/depth change is also
+valid press feedback. Disable movement for reduced motion and do not delay the action.
 
 ### Never animate from scale(0)
 
@@ -403,7 +406,7 @@ Start with `clip-path: inset(0 0 100% 0)`. Animate to `inset(0 0 0 0)` on viewpo
 ### Comparison sliders
 
 Overlay two images. Clip the top with `clip-path: inset(0 50% 0 0)`. Adjust right inset based
-on drag position. No extra DOM, fully hardware-accelerated.
+on drag position. No extra DOM; verify paint/compositing for the target browser and image size.
 
 ---
 
@@ -450,10 +453,11 @@ function onPress() {
 
 ## Performance Rules
 
-### Only animate transform and opacity
+### Prefer transform and opacity for movement
 
-These skip layout and paint, running on the GPU. Animating `padding`, `margin`, `height`, or
-`width` triggers all three rendering steps.
+These often avoid layout/paint; verify compositing under real load. Small color transitions are
+valid. Size/spacing animation can trigger layout, so keep it bounded and profile it; consider
+transform-based layout animation when appropriate.
 
 ### Update transform directly, not CSS variables
 
@@ -484,8 +488,8 @@ What holds across versions:
   acceleration is crucial, animate the full `transform` string — at the cost of per-axis
   springs and independent transform control.
 - For simple, independent `transform`/`opacity` motion that must survive a busy main thread,
-  the compositor is the guarantee: a CSS transition/animation or WAAPI directly
-  (`element.animate(...)`) runs off the main thread.
+  prefer compositor-eligible CSS transitions/animations or WAAPI directly
+  (`element.animate(...)`), then verify actual performance.
 
 **Rule: don't fight this inside the library.** Use the individual props for gesture-driven,
 interruptible, per-axis motion (their whole point); use CSS/WAAPI for predetermined motion that
@@ -493,7 +497,8 @@ must stay smooth under load — see `../layer-2-primitives.md` → Animation und
 
 ### WAAPI for programmatic CSS animations
 
-JavaScript control with CSS performance — hardware-accelerated, interruptible, no library:
+Programmatic control without a new library. Property and browser determine compositing; the
+clip-path example still needs performance measurement:
 
 ```js
 element.animate([{ clipPath: 'inset(0 0 100% 0)' }, { clipPath: 'inset(0 0 0 0)' }], {
@@ -521,7 +526,7 @@ that aid comprehension. Remove movement and position animations.
 }
 ```
 
-See `../layer-5-motion.md` for the universal reduced-motion pattern and `../layer-2-primitives.md`
+See `../layer-5-motion.md` for the static-first reduced-motion pattern and `../layer-2-primitives.md`
 for `useReducedMotion` in React.
 
 ### Touch device hover states
@@ -540,7 +545,7 @@ Gate hover animations behind this media query — touch devices fire hover on ta
 
 ## The Sonner Principles (Building Loved Components)
 
-From building Sonner (13 M+ weekly downloads). Apply to any component:
+Lessons from Sonner that can inform other components:
 
 1. **Developer experience is key.** No hooks, no context, no complex setup. Insert `<Toaster />`
    once, call `toast()` anywhere. Less adoption friction = more users.
@@ -587,13 +592,12 @@ Slow where the user is deciding; fast where the system is responding.
 
 ## Stagger Animations
 
-When multiple elements enter together, stagger their appearance for a natural cascade.
+A small stagger can introduce a bounded group in a fitting first-visit or explanatory moment.
+Do not add it to every list or repeated data refresh. Keep content available if animation fails.
 
 ```css
 .item {
-  opacity: 0;
-  transform: translateY(8px);
-  animation: fadeIn 300ms ease-out forwards;
+  animation: fadeIn 300ms ease-out backwards;
 }
 .item:nth-child(1) {
   animation-delay: 0ms;
@@ -609,6 +613,7 @@ When multiple elements enter together, stagger their appearance for a natural ca
 }
 
 @keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
   to {
     opacity: 1;
     transform: translateY(0);
@@ -616,7 +621,9 @@ When multiple elements enter together, stagger their appearance for a natural ca
 }
 ```
 
-> Keep stagger delays at 30–80 ms between items. Longer delays make the interface feel slow.
+Under `prefers-reduced-motion: reduce`, use `.item { animation: none; }`.
+
+> For a small group, 30–80 ms between items is a starting point; cap total delay. Longer delays make the interface feel slow.
 > Stagger is decorative — never block interaction while stagger animations are playing.
 
 ---
@@ -629,7 +636,7 @@ Temporarily increase duration 2–5×, or use browser DevTools animation inspect
 
 Check for:
 
-- Two distinct states visible during crossfade (add blur to fix)
+- Two distinct states visible during crossfade (check overlap/timing first; blur is optional)
 - Abrupt start/stop (easing issue)
 - Wrong transform-origin
 - Desync between animated properties (opacity, transform, color)
@@ -655,10 +662,10 @@ better for gesture testing.
 | `scale(0)` entry animation             | Start from `scale(0.95)` with `opacity: 0`                                                |
 | `ease-in` on entering element or long animation (≥ 150 ms) | Switch to `ease-out` or custom curve; `ease-in` is acceptable only on quick exits (< 150 ms) |
 | `transform-origin: center` on popover  | Set to trigger location or use Radix/Base UI CSS variable (modals exempt — keep centered) |
-| Animation on keyboard action           | Remove animation entirely                                                                 |
-| Duration > 300 ms on UI element        | Reduce to 150–250 ms                                                                      |
+| Delayed repeated keyboard action       | Remove delay; keep focus and feedback immediate                                                                 |
+| Repeated action feels slow             | Shorten or remove transition; measure the whole interaction                                                                      |
 | Hover animation without media query    | Add `@media (hover: hover) and (pointer: fine)`                                           |
 | Keyframes on rapidly-triggered element | Use CSS transitions for interruptibility                                                  |
 | Framer Motion `x`/`y` under load       | Predetermined motion that must survive main-thread load → CSS or WAAPI (`element.animate(...)`); keep individual props for gesture-driven per-axis motion. Verify acceleration claims against the installed version's docs |
-| Same enter/exit transition speed       | Make exit faster than enter (e.g. enter 2 s, exit 200 ms)                                 |
-| Elements all appear at once            | Add stagger delay (30–80 ms between items)                                                |
+| Exit distracts from the next task      | Reduce exit travel/duration when that resolves the distraction                                 |
+| Introductory sequence needs hierarchy  | Consider a bounded stagger; simultaneous appearance is valid                                                |

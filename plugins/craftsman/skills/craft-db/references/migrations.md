@@ -2,7 +2,7 @@
 
 A migration file is a durable, auditable record of every structural change to your database. The discipline: **generate migrations from your schema tool, read every generated file before it touches any environment, and never auto-push to production.** Skipping the review step is how you ship a locking `ALTER TABLE` at 3 a.m., lose data in a botched rename, or discover that your migration tool's "push" command replayed composite foreign keys and expression indexes into a non-convergent state — again.
 
-> **Scope split.** This file owns the generate-and-review workflow, migration naming and timestamp conventions, reversibility vs. honest forward-only, the safe-apply checklist, and the expand-contract pattern for breaking changes. It also covers the specific non-convergence issue with `drizzle-kit push`. The *schema design decisions* that precede a migration (column types, naming, FK modeling) live in `schema.md`. Multi-step large-table backfill staging — where to split the backfill work out of the schema migration — belongs in `integrity.md`. Where migrations run in the deploy pipeline (order relative to the app binary, rollback hooks, environment promotion gates) is owned by **`craft-infra`** → `build-release.md` and `ci-cd.md`.
+> **Scope split.** This file owns the generate-and-review workflow, migration naming and timestamp conventions, reversibility vs. honest forward-only, the safe-apply checklist, and the expand-contract pattern for breaking changes. It also covers the specific non-convergence issue with `drizzle-kit push`. The *schema design decisions* that precede a migration (column types, naming, FK modeling) live in `schema.md`. Multi-step large-table backfill staging — where to split the backfill work out of the schema migration — belongs in `integrity.md`. Release ordering around a separately applied Postgres migration, rollback hooks, and promotion gates belong to **`craft-infra`** → `build-release.md` and `ci-cd.md`.
 
 ---
 
@@ -13,6 +13,7 @@ A migration file is a durable, auditable record of every structural change to yo
 - [Naming and timestamp conventions](#naming-and-timestamp-conventions)
 - [Reversible vs. honest forward-only](#reversible-vs-honest-forward-only)
 - [Safe-apply checklist](#safe-apply-checklist)
+- [Where and how migrations connect](#where-and-how-migrations-connect)
 - [Expand-contract for breaking changes](#expand-contract-for-breaking-changes)
 - [Quick-reject checklist](#quick-reject-checklist)
 
@@ -22,7 +23,7 @@ A migration file is a durable, auditable record of every structural change to yo
 
 The generate-and-review workflow is not bureaucracy — it is the only reliable way to see what the migration tool actually decided, which is often not what you expected.
 
-1. **Generate** the migration file from your schema tool (e.g. `pnpm drizzle-kit generate`, `prisma migrate dev --create-only`, `knex migrate:make <name>` (knex separates make and run by default — `migrate:make` only creates; no flag needed)). Use the `--create-only` / equivalent flag where available so the tool writes the file without running it.
+1. **Generate** the migration file from your schema tool. For Postgres, run `pnpm drizzle-kit generate` and commit both the SQL and `meta/_journal.json`. If you are reviewing another database engine, use its migration generator with a create-only mode so it writes a file without applying it.
 2. **Read the entire generated file** before anything else. Confirm: the right columns are being added/dropped; no unexpected renames occurred; indexes match the intent; any generated `DOWN` block is actually safe. Tools that infer renames from column similarity can get it wrong — a missed rename becomes a data-destroying drop-then-add.
 3. **Apply to a local dev database** and inspect the resulting schema. `\d tablename` (psql), `DESCRIBE tablename` (MySQL), or your ORM's introspection command. The schema should match your design exactly.
 4. **Apply to a staging environment** that holds a reasonably realistic copy of the data. A migration that is trivial on an empty dev database may lock for minutes on a table with tens of millions of rows. Staging is where you find this.
@@ -114,6 +115,45 @@ Work through this before running any migration against staging or production.
 
 ---
 
+## Where and how migrations connect
+
+The migration *file* can be perfect and still fail, or hurt production,
+because of how the runner connects. The adopted Postgres profile's rules are in
+`postgres-standard.md` §6; check these mechanics alongside the SQL:
+
+- **A direct or session connection, never the transaction pooler.** DDL,
+  migration-runner advisory locks, `SET` for the session and non-transactional
+  steps all need one real session. Use a separate env var (e.g.
+  `DATABASE_URL_DIRECT`) and make the runner refuse the transaction-pooler
+  endpoint, failing closed rather than rewriting the port. See
+  `connection-pooling.md` → "Connection targets".
+- **Its own role, with its own timeouts.** Runtime roles carry short
+  `statement_timeout` defaults (`connection-pooling.md` → "Timeouts and
+  roles"). The migration runner logs in as the owner/migration role and sets
+  its session limits *before* `BEGIN`:
+  ```sql
+  SET statement_timeout = 0;      -- or an explicit ceiling for this migration
+  SET lock_timeout = '10s';       -- fail fast instead of queueing behind traffic
+  ```
+  If runtime and migrations still share one role, this override is
+  mandatory, and the runner's test must assert it. Otherwise the first long
+  migration is killed halfway by the app's 15 s timeout.
+- **Run by a person or a manually dispatched workflow.** Apply to staging first. Never inside the platform
+  build (a serverless build command that migrates production on every
+  deploy), never at app or worker boot, never from ordinary CI.
+- **Push stays local.** `drizzle-kit push` (or equivalent) is guarded to
+  loopback URLs in the script that wraps it.
+- **Non-transactional steps are registered, not dodged.** If the runner wraps
+  each file in a transaction, `CREATE INDEX CONCURRENTLY` goes in a registered
+  step the runner executes outside a transaction. Tests run the same chain;
+  they never strip `CONCURRENTLY` to make it pass.
+- **Drift is checked on every commit.** Regenerating from the schema must
+  produce no new migration (for drizzle: run `drizzle-kit generate` in CI and
+  fail on any diff), and a journal test confirms every file on disk is in
+  the journal and vice versa.
+
+---
+
 ## Expand-contract for breaking changes
 
 A "breaking" schema change is one where the old application binary is incompatible with the new schema, or vice versa. The canonical examples: renaming a column, changing a column's type in a way the old code cannot read, splitting a table. Doing any of these in a single migration with a deploy-then-run order causes downtime — the window between the migration running and the app binary restarting has one of them out of sync.
@@ -138,12 +178,11 @@ The expand-contract pattern avoids this by making the change across multiple mig
    -- This file must run outside a transaction block:
    CREATE INDEX CONCURRENTLY idx_users_email ON users(email);
    ```
-   If your runner has no per-file non-transactional mode (Flyway Community, golang-migrate default):
-   two options — (a) run the `CREATE INDEX CONCURRENTLY` statement manually via `psql` outside the
-   migration runner and record it as a manual step in the deploy runbook, or (b) use a plain
-   (non-CONCURRENTLY) `CREATE INDEX` in a scheduled maintenance window where the write-lock is
-   acceptable. Document the choice; do not silently drop the `CONCURRENTLY` without noting the
-   lock implications.
+   If the runner has no per-file non-transactional mode, extend the real `db:migrate` runner
+   with a registered `manual/` step and applied-log before using `CONCURRENTLY`. A plain
+   (non-CONCURRENTLY) `CREATE INDEX` is an alternative only in a scheduled maintenance window
+   where its write lock is acceptable; keep it in the registered migration chain and document
+   the lock implications. Do not run untracked `psql` outside the runner.
 4. **Constrain (NOT NULL)** — once all rows have `email` populated, add the NOT NULL constraint.
    ```sql
    ALTER TABLE users ALTER COLUMN email SET NOT NULL;
@@ -166,9 +205,9 @@ Flag with `file:line` and the fix:
 
 | Pattern | Fix |
 | --- | --- |
-| Migration applied via ORM schema-sync / push mode (`drizzle-kit push`, `db push`, `synchronize: true`, or equivalent) to staging or production | Generate a migration file; apply via the migration runner; never push in non-dev environments |
+| Migration applied via ORM schema-sync / push mode (`drizzle-kit push`, `db push`, `synchronize: true`, or equivalent) to a non-loopback database | Generate a migration file; apply via the migration runner; never push outside loopback |
 | Generated migration file unread before first apply | Read the full SQL before any `migrate up`; reject the PR if the reviewer cannot confirm this was done |
-| `CREATE INDEX` without `CONCURRENTLY` on a production table | Use `CREATE INDEX CONCURRENTLY`; note this cannot run inside a transaction block |
+| `CREATE INDEX` without `CONCURRENTLY` on a live large table and no approved lock window | Use registered `CREATE INDEX CONCURRENTLY`; it must run outside a transaction block |
 | `ALTER TABLE … ADD COLUMN … NOT NULL` with a constant default on Postgres < 11 | Add as nullable, backfill, then `SET NOT NULL` in separate steps |
 | Multi-step data change (backfill) inside a schema migration | Split the backfill into its own migration or script; see `integrity.md` |
 | Column rename done as a single drop-add migration | Use expand-contract: add new, dual-write, backfill, drop old, across multiple deploys |
@@ -178,3 +217,8 @@ Flag with `file:line` and the fix:
 | Migration bundles multiple unrelated changes in one file | One logical change per file; separate timestamps, separate review |
 | No staging apply before production | Always apply to staging first; large-table locks only appear at scale |
 | FK added to a column with no covering index on the referencing side | Add an index on the FK column before or alongside the constraint |
+| Migrations applied through the transaction-mode pooler URL | Use a direct/session URL; the runner refuses the pooler endpoint |
+| Migrations run in the platform build or at app/worker boot | A manual or dispatched step, staging first |
+| Runner shares the runtime role and doesn't set `statement_timeout`/`lock_timeout` before `BEGIN` | A separate migration role, or a mandatory, tested session override |
+| No drift check in CI (schema changes without a migration can merge) | Regenerate in CI and fail on a diff; add a journal test |
+| Test harness rewrites migration SQL (e.g. strips `CONCURRENTLY`) to apply it | Register non-transactional steps; test the exact chain with the real runner |

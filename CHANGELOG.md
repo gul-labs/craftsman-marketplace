@@ -26,6 +26,73 @@ not a synonym for "public."
 
 Nothing yet.
 
+## [0.11.0] (2026-09-25)
+
+Marketplace `0.11.0`; `craftsman` moves to `0.7.0`; `taxcraft` is unchanged at `0.4.0`.
+
+MINOR: two new `craft-db` references (`postgres-standard.md` and `driver-migration.md`)
+and new sections in three others. The former is the canonical, scoped Postgres profile;
+the other references explain implementation rather than set competing requirements.
+
+The problem this release answers: `connection-pooling.md` recommended postgres.js as *the*
+Postgres driver for Drizzle and told readers to switch to it. Behind a transaction-mode pooler
+(PgBouncer, Supavisor, RDS Proxy), which is how most managed Postgres is reached from serverless,
+that advice leads to production failures that don't show on a laptop:
+- concurrent requests hanging on pipelined queries that never reach Postgres (observed behind
+  Supavisor; unverified for other poolers);
+- two driver defects that apply behind any pooler: `max_pipeline: 0`, the obvious fix, makes
+  every transaction fail, and a connection lost mid-transaction wedges the pool slot forever.
+
+The guidance was also silent on where timeouts actually take effect behind a pooler, on
+transaction deadlines, on migration connection paths, and on what a test may connect to.
+
+- `connection-pooling.md`, rewritten around node-postgres:
+  - driver choice behind transaction-mode poolers, with the failure mechanisms;
+  - runtime vs direct connection URLs with fail-closed guards and explicit verified SSL;
+  - a pure `buildPoolConfig` plus a singleton with error handlers on idle *and* checked-out
+    clients, and platform suspension helpers;
+  - serverless-first sizing (`max: 1`) with a fleet budget against an enforced instance ceiling,
+    and worker sizing;
+  - timeouts via role defaults and `SET LOCAL` rather than dropped startup parameters, with
+    separate runtime and migration roles;
+  - a transaction helper, built on the ORM's transaction on an explicitly checked-out client
+    (so savepoints nest correctly). It enforces a wall-clock deadline checked before COMMIT, reports
+    a timeout or lost reply around COMMIT as an unknown outcome, destroys failed clients, passes an
+    `AbortSignal`, and rethrows the original error; when rollback also fails before the deadline,
+    it keeps that failure on `rollbackError` (and `cause` when free);
+  - pooler-specific behaviour (leak / pin / reject / drop) separated from driver defects;
+  - session locks and LISTEN confined to singleton modules;
+  - shared-pool readiness, DB telemetry, error classification, and bounded retries;
+  - an expanded quick-reject table.
+- `driver-migration.md` (new): the playbook for moving postgres.js → node-postgres.
+  - Inventory, then a result-shape and type-compatibility table. This covers Drizzle's
+    pass-through parsers, standalone clients vs Drizzle-wrapped ones, and the `QueryResult`
+    envelope.
+  - A `rowsOf` helper, option mapping, raw-API rewrites, a verification gate on real Postgres,
+    and interim mitigations.
+- `seeding-and-testing.md`:
+  - test-database safety (loopback only, no override flag, lazy pool singletons with an
+    import-graph check and a runtime guard in unit tests, PGlite vs loopback Postgres by what the test proves);
+  - standard database suites T1–T8, with sketches for connection-loss and in-flight-count tests;
+    Docker-free connection tests use a throwaway local Postgres cluster at the production major;
+  - a dated, loopback-only COMMIT-outcome proof in `docs/postgres-commit-proof-2026-09-25.md`
+    with the repeatable harness `scripts/repro-pg-commit-outcome.cjs` and
+    CI guard test `scripts/test-repro-pg-guard.cjs`;
+  - the rollback helper moved to node-postgres.
+- `migrations.md`: "Where and how migrations connect" covers the direct/session URL, the migration
+  role with session timeouts before `BEGIN`, never in the build or at boot, local-only push,
+  registered non-transactional steps, and drift and journal checks in CI.
+- `craft-db/SKILL.md`: a standing opinion on pooler-safe drivers and bounded transactions, the
+  reference index, and new audit-checklist items (driver/pooler, pool construction,
+  connection targets, timeouts and roles, the transaction helper, the migration apply path, test
+  safety and suites, DB health and retries).
+- `access-patterns.md`, `integrity.md`, `schema.md`, `craft-testing/backend-data-testing.md`,
+  `craft-audit/recommended-stack.md`, `craft-infra/runtime-health.md`, and
+  `craft-infra/scale-resilience.md`, `craft-infra/ci-cd.md`, and `craft-infra/iac.md`: cross-links to the transaction helper and test safety; the
+  default Postgres pick names the connection pattern; test migrations use the real guarded runner;
+  the Docker-free fallback uses a throwaway local cluster for connection tests; and Postgres
+  readiness, timeout, and manual migration release guidance follows the same pool and role rules.
+
 ## [0.10.0] (2026-09-11)
 
 Marketplace `0.10.0`; `taxcraft` moves to `0.4.0`; `craftsman` is unchanged at `0.6.0`.

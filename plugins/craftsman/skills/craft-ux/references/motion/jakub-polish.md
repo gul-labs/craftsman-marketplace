@@ -40,7 +40,8 @@ Apply Jakub's approach when:
 
 ## Enter / Exit Recipe
 
-Canonical materializing enter — opacity + translateY + blur together:
+Optional materializing effect for a suitable brief. Start with opacity/small movement; add blur
+only when it improves continuity without obscuring content or causing expensive paint:
 
 ```jsx
 // Enter
@@ -53,11 +54,11 @@ Blur creates a "materializing" effect (element comes into focus, not just fades 
 
 For full container slides, replace `translateY: 8` with `translateY: "calc(-100% - 4px)"`.
 
-**Exit must be subtler than enter.** User focus moves to what arrives, not what leaves:
+**Exits often benefit from less movement.** User focus moves to what arrives, not what leaves:
 
 ```jsx
 // Exit — less movement, same blur signal
-exit={{ translateY: "-12px", opacity: 0, filter: "blur(4px)" }}
+exit={{ translateY: "-4px", opacity: 0, filter: "blur(4px)" }}
 ```
 
 Exceptions: user-initiated dismissal, item deletion, full-page transitions where direction matters.
@@ -78,7 +79,8 @@ Exceptions: user-initiated dismissal, item deletion, full-page transitions where
 
 ## Shadows over Borders
 
-In light mode on dynamic backgrounds (images, gradients), prefer multi-layer `box-shadow` over solid borders. Shadows adapt via transparency; borders clash.
+A subtle layered shadow can define a light surface against a varied background. A quiet border
+can work too, alone or with shadow; tune both against the actual canvas. See `../cards.md`.
 
 ```css
 .card {
@@ -88,7 +90,7 @@ In light mode on dynamic backgrounds (images, gradients), prefer multi-layer `bo
     0 2px 4px 0 rgba(0, 0, 0, 0.04);
 }
 
-.card:hover {
+.card--interactive:hover {
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.08),
     0 1px 2px -1px rgba(0, 0, 0, 0.08),
@@ -167,7 +169,8 @@ When icon changes state (copy → check, loading → done), animate with `Animat
 </AnimatePresence>
 ```
 
-Instant icon swaps feel jarring and go unregistered. The animated transition confirms the action.
+A short icon transition can confirm an action; an immediate swap with a clear label/status is
+also valid. Avoid queuing rapid actions behind exit timing. Provide a reduced-motion branch.
 
 ---
 
@@ -183,12 +186,14 @@ Motion's `layoutId` drives FLIP transitions (First, Last, Invert, Play) between 
 <motion.div layoutId="card" className="large-card" />
 ```
 
-Motion auto-animates between sizes, positions, and component types.
+Motion connects the corresponding elements and animates layout using transforms. See the
+[official layout guide](https://motion.dev/docs/react-layout-animations) for the installed version.
 
 **Rules:**
 
-- Keep `layoutId` elements outside `AnimatePresence` — nesting triggers conflicting initial/exit animations
-- Each element needs a unique `layoutId`
+- Corresponding source/destination elements share a `layoutId`; unrelated pairs need distinct IDs.
+- `AnimatePresence` can retain an exiting shared element until its transition finishes. Coordinate
+  initial/exit props deliberately; do not ban this supported composition.
 - Works across height, width, position, and element type
 
 ---
@@ -197,7 +202,7 @@ Motion auto-animates between sizes, positions, and component types.
 
 ### will-change
 
-Declare before animation starts to avoid first-frame stutter (browser needs time to promote to GPU layer):
+Use only when profiling reveals a promotion problem, before the affected animation starts:
 
 ```css
 /* Correct — specific properties */
@@ -211,18 +216,14 @@ Declare before animation starts to avoid first-frame stutter (browser needs time
 }
 ```
 
-Safe to declare: `transform`, `opacity`, `filter`, `clip-path`, `mask`.
-
-Only set on elements that will animate. Each GPU layer consumes memory — don't scatter it.
+Name only the property that needs the hint. It does not guarantee GPU compositing. Each promoted
+layer consumes memory; remove the hint when no longer useful.
 
 ### Gradient animation
 
-| Property                                             | Cost                    |
-| ---------------------------------------------------- | ----------------------- |
-| `background-position`, `background-size`, `opacity`  | Cheap — GPU             |
-| Color stops, adding/removing layers, switching types | Expensive — CPU repaint |
-
-For animated gradients: animate `background-position` on an oversized gradient, or transition a pseudo-element overlay.
+Animate a pre-rendered gradient layer using transform/opacity when practical. Changing
+`background-position`, `background-size`, or color stops can repaint; none is a universal cheap
+GPU path. Profile the target size and browser before committing to continuous effects.
 
 ---
 
@@ -231,11 +232,11 @@ For animated gradients: animate `background-position` on an oversized gradient, 
 | Mistake                                   | Fix                                           |
 | ----------------------------------------- | --------------------------------------------- |
 | Exit as prominent as enter                | Exit at half the movement and duration        |
-| Solid border on image/gradient background | Multi-layer shadow adapts via transparency    |
+| Harsh edge on a varied background         | Tune border/shadow together against that canvas    |
 | Geometric centering on asymmetric icons   | Adjust padding/position optically             |
-| Hover state changes instant               | Add 150–200 ms transition on all hover states |
+| Hover feedback feels abrupt               | Consider a brief transition; instant feedback can be right |
 | `will-change: all`                        | Declare specific properties only              |
-| Animating gradient color stops            | Animate `background-position` instead         |
+| Large gradient repaints each frame        | Prefer transformed/opacity layers; profile actual paint         |
 
 ---
 
@@ -246,13 +247,13 @@ For animated gradients: animate `background-position` on an oversized gradient, 
 | Enter animation    | opacity + translateY(8px) + blur(4px) → all to default |
 | Exit animation     | Subtler than enter — less movement, same blur signal   |
 | Spring config      | `duration: 0.45, bounce: 0` for production             |
-| Shadows vs borders | Multi-layer shadow adapts to any background            |
+| Shadows vs borders | Tune shadow and edge to the actual background            |
 | oklch gradients    | Perceptually uniform — no muddy midpoints              |
 | Optical alignment  | Trust eyes over math on asymmetric shapes              |
 | Icon swap          | AnimatePresence mode="wait" + opacity + scale + blur   |
-| Shared layout      | layoutId + FLIP; keep outside AnimatePresence          |
+| Shared layout      | Shared IDs connect pairs; AnimatePresence can retain exits          |
 | will-change        | Specific properties only; set before animation         |
-| Gradient perf      | Animate position/size not color stops                  |
+| Gradient perf      | Prefer composited layers; profile paint cost                  |
 
 ---
 

@@ -56,7 +56,7 @@ This protocol drives the structure. Load lazily based on what the code actually 
 **Load only when the code under review touches that category:**
 
 - `layer-1-tokens.md` — only when flagging spacing / typography / color / radius values
-- `layer-3-components.md` — only when reviewing forms, modals, tables, navigation, or state UI
+- `layer-3-components.md` — when reviewing cards, forms, modals, tables, navigation, or state UI
 - `layer-2-primitives.md` — only when reviewing Tailwind/CVA, hydration, viewport, or performance
 - `motion/` references — only for motion-heavy code
 - The project's own UX skill, if one exists (discover it) — only when competitive context or project-specific tokens matter
@@ -66,6 +66,19 @@ landing-page references. Be honest about what the code does, then pull just thos
 
 ---
 
+### Visual assessment is separate
+
+For visual reviews, load `visual-design.md` and evaluate the requested design outcome alongside
+code correctness. Color/surface work also requires `color-and-surfaces.md`; card work requires
+`cards.md`. A static pass may identify a risky recipe, but needs screenshots or a live view to
+claim that the composition looks polished. A screenshot-only critique can cite the visible region
+and condition; source locations are added when available, never invented.
+
+For a visual finding, record the element/region, viewport/theme/state, observed mismatch with the
+brief, and what would clear it. This makes findings repeatable without treating a font name or
+hue as a universal defect. Under craft-audit, put that condition and observable mismatch in the
+existing Technical/Fingerprint fields; do not invent a new findings schema.
+
 ### What to Walk Through (Pointers, Not Content)
 
 Cover these categories. Specific violations to flag live in the referenced file — don't
@@ -73,6 +86,7 @@ duplicate them here.
 
 | Category                                                                                   | Where to find the checks                                                |
 | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| Visual quality (hierarchy, color composition, cards, typography, identity) | `visual-design.md`, `color-and-surfaces.md`, `cards.md` |
 | Visual fidelity (spacing, typography, color, radius, shadows, icons, motion timing)        | `layer-1-tokens.md`                                                     |
 | State completeness (loading, empty, error, populated)                                      | `layer-4-states.md` → Empty/Loading/Error States                    |
 | Component patterns (forms, tables, modals, navigation, notifications)                      | `layer-3-components.md`                                                 |
@@ -188,13 +202,10 @@ grep -rnE "\b(text|bg|border(-[trblxyse])?|ring|ring-offset|outline|divide|fill|
 # Performance anti-patterns
 grep -rn "z-\[[0-9]\{4,\}\]" --include="*.tsx"
 grep -rn 'bg-\${' --include="*.tsx"
-grep -rn "addEventListener(['\"]scroll\|window\.scrollY" --include="*.tsx"  # scroll-frame jank — see layer-5-motion.md → Forbidden Animation Patterns
+grep -rn "addEventListener(['\"]scroll\|window\.scrollY" --include="*.tsx"  # inspect per-frame cost — see layer-5-motion.md → Implementation and performance
 
-# Copy & decoration tells — MARKETING/LANDING/PORTFOLIO SCOPE ONLY (advisory on product UI).
-# See anti-patterns.md → Copy & Decoration Tells for what each means and its override path.
-grep -rn "—\|–" --include="*.tsx"                    # em/en-dash in UI strings; filter to user-visible copy, not comments
-grep -rnc "uppercase tracking" --include="*.tsx"      # eyebrow count; flag if total > ceil(sections / 3)
-grep -rniE "#(f5f1ea|f7f5f1|fbf8f1|efeae0|ece6db|b08947|b6553a|9a2436|9c6e2a|1a1714)" --include="*.tsx" --include="*.css"  # beige+brass premium-consumer palette seeds
+# Visual style cannot be decided by a grep for fonts, hue families, or punctuation.
+# Review the rendered brief, hierarchy, surfaces, and card craft via visual-design.md.
 
 # Layout-primitive bypass (project-specific — adapt per CLAUDE.md)
 grep -rn 'className=.*\\bspace-y-\|className=.*\\bflex items-center gap-' --include="*.tsx"
@@ -253,7 +264,7 @@ system is used"; check the second.
 
 ## Critical (Must Fix — Blocks Merge)
 
-| | Issue | File | Action |
+| | Issue | Location / evidence | Action |
 |-|-------|------|--------|
 | 🔴 | Form input missing `<label>` — fails accessibility | `signup-form.tsx:42` | Wrap input in `<label>` or add `htmlFor` |
 | 🔴 | `[375px] ` Primary CTA pushed off-screen, untappable | `checkout.tsx:88` | Constrain width / wrap at the smallest breakpoint |
@@ -261,17 +272,18 @@ system is used"; check the second.
 
 ## Important (Should Fix — This PR)
 
-| | Issue | File | Action |
+| | Issue | Location / evidence | Action |
 |-|-------|------|--------|
 | 🟡 | Hardcoded `text-red-500` instead of token | `error-banner.tsx:12` | Use `text-destructive` |
 | 🟡 | Skeleton dimensions don't match content | `dashboard.tsx:88` | Set explicit width/height on skeleton |
+| 🟡 | Repeated card badges dominate the requested hierarchy | Project grid · 1280px · light · populated screenshot | Reduce badge emphasis and strengthen project titles |
 
 ## Opportunities (Next Iteration)
 
 | | Enhancement | Where | Impact |
 |-|-------------|-------|--------|
-| 🟢 | Add stagger to list entry | `feed.tsx:24` | More polished feel; 30 ms delay between items |
-| 🟢 | Tint shadow instead of pure black | `card.tsx:8` | Better adaptation on varied backgrounds |
+| 🟢 | Improve an optional onboarding illustration | Welcome panel · 1280px · light · first visit | Better explanation of the first task; current flow remains clear |
+| 🟢 | Refine icon optical alignment | `button.tsx:24` | Minor balance improvement; legibility and interaction already work |
 
 ## What's Working Well
 
@@ -305,7 +317,12 @@ real user complete their task right now?" Then:
 
 - **🔴 Critical — they cannot.** Merge blocker.
 - **🟡 Important — they can, but it's degraded.** Fix in this PR.
-- **🟢 Opportunity — they can, and it works fine.** Polish for next iteration.
+- **🟢 Opportunity — they can, and it meets the requested outcome.** Optional refinement.
+
+A clear visual failure against an explicit design/polish brief is **Important**, even when the
+flow remains usable: weak hierarchy, clashing surfaces, or unfinished card groups are part of
+that task's acceptance. A stylistic preference without an observed consequence is not a finding.
+Do not automatically defer all aesthetic issues to a future iteration.
 
 When in doubt, downgrade. Over-claiming Critical is the most common audit failure — it burns
 trust and trains the reader to ignore future findings.
@@ -326,8 +343,8 @@ trust and trains the reader to ignore future findings.
 | Raw `flex gap-*` in a project with layout primitives                     | Inconsistency, not user impact                                     | 🟡 Important   |
 | No `focus-visible:ring-*` AND no `outline-none` (browser default rings)  | Keyboard user sees the browser default — not blocked               | 🟢 Opportunity |
 | Inconsistent focus token across two buttons                              | Style drift; still focusable                                       | 🟡 Important   |
-| Stagger / spring missing on a list                                       | Functional; could feel nicer                                       | 🟢 Opportunity |
-| Pure-black shadow that could be tinted                                   | Functional; could adapt better                                     | 🟢 Opportunity |
+| Card group misses the requested hierarchy and visual direction | Observed failure of the polish brief, with screenshot evidence | 🟡 Important |
+| Alternative font or motion with no demonstrated benefit | Preference only | No finding |
 
 The audit error to avoid most aggressively: claiming a button is "keyboard inaccessible" when
 it has no explicit focus styles AND no outline suppression. The browser draws a default ring.
@@ -341,9 +358,10 @@ The user can see focus. The fix is consistency (🟡), not accessibility (🔴).
   render anything. That's a deliberate scope, not a blind spot: it's where structural and compliance
   defects are cheapest to catch. For what code-reading *can't* see (contrast in context, focus rings
   as drawn, felt layout shift, real breakpoints), run the **live pass** in `live-audit.md` — don't
-  assert a clean bill of visual health from source alone. For screenshot/Figma audits without code,
-  ask for the corresponding files first.
-- **Cite `file:line` for every finding.** No vague "the modal needs work" — point to the line.
+  assert a clean bill of visual health from source alone. Screenshot/Figma critique can proceed
+  on visible evidence; keep implementation claims unverified until source is available.
+- **Cite evidence for every finding.** Use `file:line` for source findings. For screenshot-only
+  findings use region + viewport/theme/state and the image reference; do not invent source locations.
 - **Propose the fix.** "Missing focus ring" is incomplete. "Missing focus ring — add
   `focus-visible:ring-2 focus-visible:ring-ring`" is complete.
 - **Don't write fixes during review.** Emit findings only — the user applies them with a
@@ -360,8 +378,9 @@ The user can see focus. The fix is consistency (🟡), not accessibility (🔴).
 - **Live / rendered behaviour** — contrast in context, focus-visible as drawn, felt layout shift,
   real breakpoints, states as experienced. Run the live pass in `live-audit.md` (Playwright /
   `claude-in-chrome`) after this static pass.
-- **Building new UI from scratch** — load `layer-1-tokens.md` + `layer-3-components.md` + `layer-2-primitives.md` instead
-- **Motion-only audits** — use `motion/` references directly
+- **Building new UI from scratch** — use the build workflow in `SKILL.md`, starting with
+  `visual-design.md` and the applicable color/card/component methods
+- **Motion-only audits** — use `layer-5-motion.md`, then applicable `motion/` references
 - **Pure compliance scan** — follow the Web-Interface Compliance section below in isolation
 - **Brand strategy / competitive intelligence** — that's the project's own UX skill's domain
 
@@ -379,7 +398,7 @@ code-mutating audit does the most damage exactly here.
 | **Skip-to-content link** | Global link whose `#main-content` target is missing on trees that render outside the layout (`error.tsx`, `not-found.tsx`, parent/global boundaries); or a duplicate landmark when a layout already has one | Activate the link on a normal route **and** on error / 404 / empty; exactly one `<main id="main-content">` per rendered tree (`layer-3-components.md` → skip-link unit) |
 | **Error boundary (`error.tsx`)** | False "fixed": a segment's own `error.tsx` does **not** catch its own `layout`/provider errors; or over-adding per-leaf boundaries that a cascading parent already covers | Inject a `throw` into the layout/providers and confirm a parent/global boundary renders a designed UI (State completeness parity above) |
 | **Focus management (`outline-none` + ring)** | Suppressing the outline with no real ring; `ring-offset-*` with no `ring`; a ring clipped by `overflow-hidden` | Tab to it and look; `ring-offset` alone is not a ring; check it's not clipped (anti-pattern grep caveat above) |
-| **`color-scheme` / dark mode** | Setting it on a child element instead of `<html>`, so native scrollbars/form controls stay light | Confirm `color-scheme` on `<html>`; check scrollbars + native inputs in dark (compliance checklist) |
+| **`color-scheme` / supported themes** | Setting it on a child element or advertising a theme the page does not support, so native controls disagree with the page | Confirm the active supported scheme on `<html>`; check native controls in every supported theme (compliance checklist) |
 
 When you add a new high-risk fix recommendation anywhere in the skill, add its row here.
 
@@ -419,7 +438,20 @@ by the rule source.
 #### Step 2: Apply the rules to the target files
 
 Read the files in scope. For each rule in the vendored guidelines, walk the relevant lines.
-Emit findings in **terse `file:line: violation`** format. No prose, no celebrating wins —
+
+**Maintained interpretation takes precedence where documented.** Compositor-property guidance in the vendored
+animation category is a performance heuristic for movement, not a prohibition on small color/border
+transitions. This interpretation applies by subject even if upstream rewords the rule; maintainers
+must reconcile it when refreshing the vendored snapshot. Likewise, a necessary size transition is not a violation merely because it animates
+height: apply `layer-5-motion.md` → Implementation and performance and inspect its actual cost.
+In a source-only pass, record a concrete performance concern as **unverified** and identify the
+render/profile needed to settle it; do not invent a measured failure or silently claim it passed.
+Do not emit accepted cases as compliance violations. Report expensive paint/layout,
+distracting motion, or broken interaction with evidence. Other vendored rules retain their normal
+review role; this interpretation does not waive accessibility requirements.
+
+Emit source findings in **terse `file:line: violation`** format. Screenshot-only visual findings
+use the main report's location/evidence field; this source compliance pass requires source. No prose, no celebrating wins —
 just violations. The structural review above handles the wins; this pass is pure compliance.
 
 #### Step 3: Merge into the review report
@@ -428,7 +460,7 @@ Hand findings to the "Compliance Findings (from Web Interface Guidelines)" secti
 Output Format above. Severity rules:
 
 - **Critical** if the rule violates accessibility, security, or breaks core flow
-- **Important** if it's a standards violation users will feel (touch delay, missing dark mode,
+- **Important** if it's a standards violation users will feel (touch delay, a broken supported theme,
   CLS risk)
 - **Opportunity** otherwise
 
@@ -484,9 +516,9 @@ the vendored file is the canonical rule list, this section is the commentary.
 
 #### Animation rules
 
-- Animate only `transform` and `opacity` (GPU)
-- Never animate layout properties (`width`, `height`, `margin`, `padding`, `top`, `left`,
-  `gap`)
+- Prefer `transform` and `opacity` for motion; small color/edge state transitions are valid
+- Avoid costly per-frame layout; use transform-based movement where practical and profile
+  necessary size transitions (see `layer-5-motion.md`)
 - `transition: all` is banned — specify properties (`transition-[color,background-color]`)
 - `transform-origin` matches interaction source (popovers from trigger, modals from center)
 - Respect `prefers-reduced-motion`
@@ -498,7 +530,8 @@ the vendored file is the canonical rule list, this section is the commentary.
 - `outline: none` requires a `focus-visible:ring-*` replacement
 - Semantic HTML: `<nav>`, `<main>`, `<article>`, `<aside>`, `<section>` — not div soup
 - `scroll-margin-top` on heading anchors when there's a sticky header
-- Dynamic content updates announce via `aria-live` or `role="status"` / `role="alert"` — see `layer-5-motion.md` → ARIA live regions for patterns and when to use each
+- Important status updates outside focus use appropriate announcements; avoid announcing every
+  dynamic region — see `layer-5-motion.md` → ARIA live regions
 - "Skip to content" link in root layout **with a matching `#main-content` target on every tree** —
   including `error.tsx`, `not-found.tsx`, and parent/global boundaries — and exactly one per tree (no
   duplicate landmark). A global link with no target on a fallback is a regression, not a fix. See
@@ -521,12 +554,12 @@ the vendored file is the canonical rule list, this section is the commentary.
 - `env(safe-area-inset-top|right|bottom|left)` on full-bleed layouts (notches, home indicator)
 - `min-h-[100dvh]` not `h-screen` (iOS Safari layout jump)
 
-#### Dark mode
+#### Supported themes
 
-- `color-scheme: light dark` (or `colorScheme` style) on `<html>` — native scrollbars and
-  form controls won't dark-mode without it
+- Set `color-scheme` (or `colorScheme` style) to the active supported theme on `<html>`;
+  use `light dark` only when both themes are supported and native controls follow the active theme
 - `<meta name="theme-color">` matches the current page background
-- Every component verified in both light and dark, every state
+- Every component verified in every supported theme and applicable state
 
 #### Performance
 
@@ -555,8 +588,8 @@ For each finding:
 Example:
 
 ```
-apps/web/src/app/layout.tsx:54 — missing color-scheme on <html> — add style={{ colorScheme: 'light dark' }}
-apps/web/src/components/features/orgs/workspace-list.tsx:153 — transition-all banned, animating gap layout prop — transition-[color,gap]
+apps/web/src/app/layout.tsx:54 — native controls disagree with the supported light theme — add style={{ colorScheme: 'light' }}
+apps/web/src/components/features/orgs/workspace-list.tsx:153 — transition-all animates layout — restrict to color or use a transform-based layout transition
 apps/web/src/components/report-asset-image.tsx:25 — <img> missing width/height (CLS risk) — add explicit dimensions or next/image
 ```
 

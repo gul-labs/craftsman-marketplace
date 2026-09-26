@@ -57,8 +57,8 @@ infrastructure):
 | Gap | Default pick | Solid alternatives | Hand off to |
 | --- | --- | --- | --- |
 | **No real auth** | Clerk (managed, fast to wire) | Auth.js/NextAuth, Supabase Auth, Lucia, WorkOS | craft-security `authz.md`, craft-backend `auth.md` |
-| **No real database** | Postgres via Supabase or Neon (managed) | PlanetScale, RDS, Railway PG | craft-db `schema.md`, `integrity.md` |
-| **Unsafe SQL or no migration discipline** (string-built queries, no reviewed migrations, no query boundary) | Drizzle ORM + drizzle-kit migrations | Prisma; or keep disciplined parameterized SQL | craft-db `access-patterns.md`, `migrations.md` |
+| **No real database** | Postgres via Supabase or Neon (managed), connected with node-postgres (`pg` + `drizzle-orm/node-postgres`, pipelining off) through the provider's pooled endpoint for app traffic, and a direct/session URL for migrations | PlanetScale, RDS, Railway PG | craft-db `schema.md`, `integrity.md`, `connection-pooling.md` |
+| **Unsafe SQL or no migration discipline** (string-built queries, no reviewed migrations, no query boundary) | Drizzle ORM + drizzle-kit migrations for Postgres | For another database engine, retain a working ORM with parameterized queries and reviewed migrations | craft-db `access-patterns.md`, `migrations.md` |
 | **No input validation** | Zod at every boundary | Valibot, ArkType | craft-backend `validation.md` |
 | **No error tracking** | Sentry | — | craft-observability `sentry.md` |
 | **Secrets in client / raw process.env** | A validated env module (`@t3-oss/env` or hand-rolled) | — | craft-infra `config.md`, craft-security `secrets.md` |

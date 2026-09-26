@@ -47,9 +47,11 @@ These two probes answer different questions and are consumed differently:
   during normal operation — if it's flapping, the service is unstable, not temporarily busy.
 
 - **Readiness (`/ready`, `/readyz`)** — "Is this instance ready to receive new traffic right now?"
-  A failing readiness check means the load balancer should *stop sending new requests* to this
-  instance, but it should not kill it. Readiness can legitimately return `503` during startup (while
-  DB migrations run, warm-up queries execute, or caches hydrate), during graceful shutdown (draining),
+  When the orchestrator actually uses this probe for routing, a failure makes the load balancer
+  *stop sending new requests* to this instance without killing it. An external monitor that calls
+  the same endpoint only alerts; it does not remove the instance from rotation. Readiness can
+  legitimately return `503` during startup (while
+  the required schema version is not yet present, warm-up queries execute, or caches hydrate), during graceful shutdown (draining),
   and during transient overload — without triggering a kill-and-replace cycle.
 
 Conflating them into a single `/health` endpoint is the most common mistake. When health and
@@ -97,11 +99,11 @@ and cause false negatives that flap the probe.
 ## Probe contract (response shape + timing)
 
 Orchestrators (Kubernetes, ECS, Fly, Render, Cloud Run — discover which you're on from the repo's
-IaC/platform config) consume these probes by HTTP or TCP. Note: ECS and Render do not have native
-separate liveness/readiness probe endpoints — each exposes a single health-check URL. On these
-platforms you must implement the liveness/readiness logic at the application level (e.g., separate
-route logic behind a single URL, or use a path convention your deployment scripts call
-differently). The minimum contract:
+IaC/platform config) consume probes by HTTP or TCP. Some platforms expose only one native
+health-check URL. The app can still expose separate liveness and protected readiness routes,
+but the native check observes only the route it is configured to call. Document whether it
+controls routing or only restart/deploy status; a separate monitor is alerting, not routing.
+The minimum contract:
 
 - **`200 OK`** = alive / ready. `5xx` or connection failure = not alive / not ready. Some platforms
   also accept `204`; check your platform's docs.
@@ -128,9 +130,22 @@ differently). The minimum contract:
   alert rules can consume — see **`craft-observability`** → `slo-alerts.md` for how health gates
   map to SLO burn-rate windows.
 
-- **Probe endpoints must bypass authentication middleware.** They need to be reachable by the
-  orchestrator's health-check agent before any auth token or API key is available. Wire them before
-  any auth guard in the route-registration order — confirm this during startup.
+- **Probe endpoints bypass user-session authentication middleware.** Wire them before that guard
+  in route registration. For a Postgres readiness probe, require a dedicated monitor secret and
+  configure the monitor to send it; do not expose DB state and pool counts publicly. Liveness
+  remains a cheap process check without a DB call.
+
+For projects adopting `craft-db` → `postgres-standard.md`, use `/health/live` without DB access
+and `/health/ready` with `SELECT 1` on the
+**shared** pool, a 2–5 s client-side budget, and `HEALTH_MONITOR_SECRET`. Return pool counts in
+the protected readiness response. A fresh one-shot client can report green while the real pool is
+exhausted. If the platform's native probe cannot send the secret, use it for liveness and configure
+a separate authenticated readiness monitor; do not downgrade the readiness endpoint. In that
+configuration the native probe still routes traffic to an instance whose database is down.
+Record this limitation explicitly. Where dependency-based traffic gating is required, configure
+a provider-supported private/authenticated readiness integration and verify that a failing DB
+probe actually removes the instance from new-request routing. Never expose pool counts or DB
+error details publicly to satisfy a probe limitation.
 
 - **Do not cache probe responses.** Return fresh state on every call. A stale 200 that lingers after
   a dependency fails is worse than no probe.
@@ -157,8 +172,10 @@ The sequence on SIGTERM:
    `http.Server.Shutdown(ctx)` stops accepting new connections, closes idle keep-alive connections
    immediately, and waits for active handlers to complete — equivalent to `server.close()` plus
    `server.closeIdleConnections()` in Node.js. Do not call `process.exit()` at this point.
-2. **Return `503` from the readiness probe** — so the load balancer drains traffic to this instance
-   naturally during the grace period. In Kubernetes, add a `preStop` lifecycle hook with a brief
+2. **Return `503` from the readiness probe** — if the load balancer uses that route, it drains
+   traffic from this instance during the grace period. Otherwise stop accepting new requests
+   through the app/server drain path; an external monitor alone cannot remove traffic. In Kubernetes,
+   add a `preStop` lifecycle hook with a brief
    sleep (5 s is a common default) before the process closes its listener. Kubernetes removes the
    pod from Endpoints at SIGTERM time, but iptables propagation lag means traffic can still arrive
    for 1–2 s. The hook sleep absorbs that window.
@@ -236,18 +253,17 @@ model you're in changes what's even possible, before any sizing question applies
   connection string, Supavisor) in front of the DB — see `craft-db` → `connection-pooling.md` for
   the proxy patterns and driver config.
 - **Long-lived servers don't multiply the same way.** A traditional Node.js/Go/Rails/Django process
-  opens one pool at startup and reuses it across all requests for the life of the process — the
+  keeps one pool per process, created lazily on first DB use and reused for the process lifetime — the
   connection count is bounded by instance count × pool size, and instance count is comparatively
   stable (not spiking per-request the way serverless concurrency can).
-- **Edge runtimes can't hold pools at all.** Cloudflare Workers, Vercel Edge Functions, and similar
-  V8-isolate runtimes have no persistent TCP connections — there is no pool to size. Use an
-  HTTP-based driver (e.g. Neon's serverless driver) that opens a connection per query instead;
-  forcing a traditional pooled driver into an edge runtime simply doesn't work.
-- **Cloud Run and similar containerized-autoscaling platforms behave like long-lived servers, not
-  serverless functions**, for pooling purposes: each instance handles many concurrent requests over
-  its lifetime rather than one per invocation. Don't apply the "multiply per instance" serverless
-  caution as literally — but scale-to-zero cold starts still mean pool initialization should be lazy
-  or deferred, not eager at cold-start time.
+- **Edge runtimes can't hold Postgres TCP pools.** Cloudflare Workers, Vercel Edge Functions, and
+  similar V8-isolate runtimes need a Node service for Postgres access when the project follows the
+  `pg` + `drizzle-orm/node-postgres` standard. Do not add a Neon HTTP/WebSocket driver to bypass
+  the pool contract.
+- **Cloud Run and similar autoscaling containers also multiply pools.** Each instance serves many
+  requests, but its pool still contributes to the fleet budget. With high instance concurrency,
+  start at `max: 1` and raise only from measured pool wait and pooler headroom. Keep initialization
+  lazy so scale-to-zero cold starts do not open an unused pool.
 
 ---
 
@@ -322,14 +338,14 @@ shape the worker runs in.
 
 | Pattern | Fix |
 | --- | --- |
-| Single `/health` endpoint doing double duty for both liveness and readiness | Split into separate `/healthz` (liveness) and `/readyz` (readiness) routes |
+| Single `/health` endpoint doing double duty for both liveness and readiness | Split into separate routes; Postgres projects use `/health/live` and protected `/health/ready` |
 | Health probe checks DB connectivity | Move external-dep checks to readiness; health should be a process-level heartbeat only |
 | Readiness probe runs an expensive query (e.g. table scan, slow JOIN) | Replace with a lightweight `SELECT 1` / `PING` |
-| Probe endpoint gated behind auth middleware | Register probes before any auth guard; they must be reachable by the orchestrator |
+| Liveness gated behind user auth, or Postgres readiness left public | Bypass user auth for liveness; protect detailed Postgres readiness with `HEALTH_MONITOR_SECRET` |
 | No SIGTERM handler; process exits mid-request during deploys | Add drain logic: `server.close()` → resource cleanup → `process.exit(0)` with a hard deadline |
 | SIGTERM handler in a serverless function (Vercel, Lambda, Workers) | Remove it — the platform controls lifecycle; see `craft-observability` → `serverless-vs-server.md` for the full breakdown, and `scale-resilience.md` for broader runtime-model trade-offs |
-| DB pool constructed inside the request handler (new client per request) | Hoist to module-level singleton constructed once at startup |
-| Large in-process pool (`max: 20+`) in a serverless/ephemeral runtime | Use a connection-pooling proxy; set in-process `max` to 1–2 |
+| DB pool constructed inside the request handler (new client per request) | Use one lazy, process-cached singleton pool |
+| Serverless Postgres pool starts above `max: 1` without wait evidence | Use the transaction pooler, start at 1, and record fleet budget and measured wait before raising (at most 5) |
 | No `connectionTimeoutMillis` / `idleTimeoutMillis` configured | Set both so stale connections are reaped after a DB restart (declare in the env schema — see `config.md`) |
 | Long-running transaction wrapping an external HTTP call | Move the side-effecting call outside the transaction (`craft-backend` → `side-effects.md`) |
 | Pool exhaustion diagnosed as "increase max" without checking for leaks | Audit for unreleased connections first; proxy before raising limits |

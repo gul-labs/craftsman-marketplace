@@ -77,6 +77,15 @@ work that drifts.
 
 ---
 
+## Prove the visual system in use
+
+Before spreading tokens across the app, use `visual-design.md` to establish the visual direction,
+`color-and-surfaces.md` to choose roles and state pairs, and `cards.md` for relevant containers.
+Build and inspect a representative content group with buttons, text, inputs, and states on the
+actual canvas. Token consistency is a maintenance property; it does not prove visual quality.
+Adapt the layering below to the project's conventions rather than installing new abstractions
+for a small page that does not need them.
+
 ## The layered architecture
 
 Three layers plus a bridge pattern. Each layer has a single responsibility. Data flows down — never
