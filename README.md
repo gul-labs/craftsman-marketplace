@@ -1,6 +1,6 @@
 # craftsman
 
-![Craftsman inspecting a software system for production risks](./plugins/craftsman/assets/craftsman-github-hero.png)
+![Craftsman inspecting a software system for production risks](./assets/craftsman-github-hero.png)
 
 **The engineering review you'd get from the technical co-founder you don't have.**
 

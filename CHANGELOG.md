@@ -26,6 +26,32 @@ not a synonym for "public."
 
 Nothing yet.
 
+## [0.11.1] (2026-10-01)
+
+Marketplace `0.11.1`; `craftsman` moves to `0.7.1`; `taxcraft` moves to `0.4.1`.
+
+PATCH: answers the Anthropic directory review of `craftsman` 0.6.0 (`ICON_MISSING`,
+`BINARIES_NOT_INSPECTED`) and applies the same hygiene to `taxcraft` ahead of its own submission.
+No skill trigger or checklist changes.
+
+- Both `plugin.json` manifests gain the directory listing fields: `icon`, `documentationUrl`,
+  `supportUrl`, `privacyPolicyUrl`. `taxcraft` gets a mark (`assets/taxcraft-mark.svg`) in the
+  same style as `craftsman`'s; the Codex manifest references it as `composerIcon`/`logo`.
+- `craftsman` ships no binaries. The 1.9 MB hero PNG and social-preview JPG were never used by the
+  plugin; they move to the repo-root `assets/` (README link updated). The plugin is now Markdown,
+  three `.mjs` scripts, and two SVGs.
+- `craft-audit` → `workspace.md`: new hard rule for secret values. A credential finding cites
+  `file:line` and the variable name, never the value, and the audit does not open `.env` /
+  `.env.local` to confirm one. Closes the one path by which a secret could land in a workspace file.
+- `PRIVACY.md` now covers `taxcraft`: what its Python tools run, that the dependency preflight only
+  probes and never installs, that the PDF fixtures are synthetic and regenerable from
+  `make_fixtures.py`, and a note that tax documents carry SSNs/EINs the agent will see.
+
+The remaining directory findings (`MCP_FORWARDS_CREDENTIAL_ENV`, `RUNTIME_FETCH_EXEC`) are
+pattern hits on documentation: `process.env.*`/`SENTRY_AUTH_TOKEN` in advice about the user's
+code, and `curl -sI` verification tips. Neither plugin has MCP servers, hooks, `bin/`, or any
+download-and-run step; nothing to change.
+
 ## [0.11.0] (2026-09-25)
 
 Marketplace `0.11.0`; `craftsman` moves to `0.7.0`; `taxcraft` is unchanged at `0.4.0`.

@@ -195,6 +195,12 @@ means `verified` — every existing `findings.md` stays valid unchanged. The thr
 plus the **human check needed** — it must **never** assert the external condition is true or false.
 Absence of evidence is not evidence of absence.
 
+**Hard rule for secret values.** A finding about a credential — a key hardcoded in source, a committed
+`.env`, a token behind a public prefix — cites the `file:line` and the **variable name**, never the
+value. Do not paste the value into `findings.md`, the tracker, or any workspace file, even partially
+or masked; the workspace is gitignored but it is still a plain file on disk. Do not open `.env` or
+`.env.local` to confirm a value exists — the committed/ignored status and the schema are the evidence.
+
 `Confidence` is deliberately **not** folded into the `status` enum (`open|fixed|regressed|wontfix
 (reason)|fixed (merged into <ID>)`): `status` is the lifecycle field the re-run fingerprint diff
 matches on, and a finding that is inherently unverifiable from the repo would never resolve to `fixed`

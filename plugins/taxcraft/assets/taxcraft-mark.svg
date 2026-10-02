@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Taxcraft mark</title>
+  <desc id="desc">A ledger with three ruled lines and a green check mark on a dark square.</desc>
+  <rect width="256" height="256" rx="56" fill="#102A27"/>
+  <path d="M72 80h112M72 120h72M72 160h48" fill="none" stroke="#D6E8DD" stroke-linecap="round" stroke-width="20"/>
+  <path d="m144 164 18 18 36-42" fill="none" stroke="#6EE7B7" stroke-linecap="round" stroke-linejoin="round" stroke-width="18"/>
+</svg>
