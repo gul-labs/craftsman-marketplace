@@ -1,0 +1,28 @@
+                          This Product Contains Sensitive Taxpayer Data
+                           Form 1040 Account Transcript
+                                                              Request Date:                    10-14-2026
+Form Number:                                                                                         1040
+Report for Tax Period Ending:                                                                  12-31-2024
+Taxpayer Identification Number:                                                               XXX-XX-1234
+Spouse Taxpayer Identification Number:                                                        XXX-XX-5678
+SAMP TA & SAMP SP
+                      --- Any minus sign shown below signifies a credit amount ---
+Account balance:                                             -$12,000.00
+Accrued interest:                                                  $0.00      As of:          11-24-2025
+Accrued penalty:                                                   $0.00      As of:          11-24-2025
+Account balance plus accruals (this is
+  not a payoff amount):                                      -$12,000.00
+                           ** Information from the return or as adjusted **
+Filing status:                                                                       Married Filing Joint
+Adjusted gross income:                                                                        $210,000.00
+Taxable income:                                                                               $180,000.00
+Tax per return:                                                                                $31,500.00
+Total self employment tax:                                                                          $0.00
+                                          TRANSACTIONS
+CODE EXPLANATION OF TRANSACTION                                  CYCLE     DATE                    AMOUNT
+150   Tax return filed                                           20254402 11-17-2025           $31,500.00
+806   W-2 or 1099 withholding                                              04-15-2025         -$40,000.00
+846   Refund issued                                                        11-17-2025           $8,500.00
+670   Payment                                                              04-21-2026         -$12,000.00
+570   Additional account action pending                                    05-11-2026               $0.00
+                          This Product Contains Sensitive Taxpayer Data

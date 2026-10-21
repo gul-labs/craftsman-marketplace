@@ -61,6 +61,12 @@ except json.JSONDecodeError as e:
     TC_CODES = {}
 
 
+# Signed IRS amount as it appears after a label: "$1,234.56", "-$20,000.00", "$-85.00",
+# "($8,211.00)", "1,637.54". The sign may precede or follow the "$"; capturing it is what
+# keeps a credit balance from parsing as 0.
+_AMT = r"(\(?-?\$?-?[\d,]+(?:\.\d+)?\)?)"
+
+
 def _tc_label(tc: str) -> str:
     """Return a short human label for a TC code, used in anomaly messages."""
     entry = TC_CODES.get(tc, {})
@@ -167,9 +173,14 @@ def _extract_tax_period(lines: list[str]) -> str:
         )
         if m:
             return f"{m.group(2)}{mon_map.get(m.group(1)[:3].lower(), '00')}"
-        m2 = re.search(r"Tax Period Requested\s*:\s*(\w+),?\s+(\d{4})", line, re.IGNORECASE)
+        m2 = re.search(r"Tax Period Requested\s*:\s*([A-Za-z]+),?\s+(\d{4})", line, re.IGNORECASE)
         if m2:
             return f"{m2.group(2)}{mon_map.get(m2.group(1)[:3].lower(), '00')}"
+        # 2026+ layouts: "Report for Tax Period Ending: 12-31-2024", "Tax Period Requested: 12-31-2025"
+        m3 = re.search(r"(?:TAX PERIOD|Tax Period Ending|Tax Period Requested)\s*:\s*(\d{2})-\d{2}-(\d{4})",
+                       line, re.IGNORECASE)
+        if m3:
+            return f"{m3.group(2)}{m3.group(1)}"
     return ""
 
 
@@ -237,27 +248,27 @@ def _extract_return_section(lines: list[str]) -> dict:
     # AGI — handle UPPERCASE (older e-services) and Mixed Case (2026+) layouts,
     # with optional "$" prefix on the amount.
     sec["agi"] = (
-        g(r"ADJUSTED GROSS\s+INCOME\s*:\s*\$?([\d,.()\-]+)", re.IGNORECASE | re.DOTALL)
-        or g(r"ADJUSTED GROSS INCOME\s*:\.+\s*\$?([\d,.()\-]+)", re.IGNORECASE)
+        g(r"ADJUSTED GROSS\s+INCOME\s*:\s*" + _AMT, re.IGNORECASE | re.DOTALL)
+        or g(r"ADJUSTED GROSS INCOME\s*:\.+\s*" + _AMT, re.IGNORECASE)
     )
 
     # TAXABLE INCOME — must not match "SE TAXABLE INCOME"
     sec["taxable_income"] = (
-        g(r"(?<!\w)TAXABLE INCOME\s*:\s*\$?([\d,.()\-]+)", FLAGS_ML)
-        or g(r"(?<!\w)TAXABLE INCOME\s*:\.+\s*\$?([\d,.()\-]+)", FLAGS_ML)
+        g(r"(?<!\w)TAXABLE INCOME\s*:\s*" + _AMT, FLAGS_ML)
+        or g(r"(?<!\w)TAXABLE INCOME\s*:\.+\s*" + _AMT, FLAGS_ML)
     )
 
     # TAX PER RETURN (Account/RoA) or TOTAL TAX LIABILITY TP FIGURES (Return Transcript)
     sec["tax_per_return"] = (
-        g(r"TAX PER RETURN\s*:\s*\$?([\d,.()\-]+)", re.IGNORECASE)
-        or g(r"TOTAL TAX LIABILITY TP FIGURES\s*:\.+\s*\$?([\d,.()\-]+)", re.IGNORECASE)
+        g(r"TAX PER RETURN\s*:\s*" + _AMT, re.IGNORECASE)
+        or g(r"TOTAL TAX LIABILITY TP FIGURES\s*:\.+\s*" + _AMT, re.IGNORECASE)
     )
 
     # SE TAX
     sec["se_tax"] = (
-        g(r"TOTAL SELF\s+EMPLOYMENT TAX\s*:\s*\$?([\d,.()\-]+)", re.IGNORECASE | re.DOTALL)
-        or g(r"TOTAL SELF EMPLOYMENT TAX\s*:\s*\$?([\d,.()\-]+)", re.IGNORECASE)
-        or g(r"SE TAX PER COMPUTER\s*:\.+\s*\$?([\d,.()\-]+)", re.IGNORECASE)
+        g(r"TOTAL SELF\s+EMPLOYMENT TAX\s*:\s*" + _AMT, re.IGNORECASE | re.DOTALL)
+        or g(r"TOTAL SELF EMPLOYMENT TAX\s*:\s*" + _AMT, re.IGNORECASE)
+        or g(r"SE TAX PER COMPUTER\s*:\.+\s*" + _AMT, re.IGNORECASE)
     )
 
     return sec
@@ -274,15 +285,15 @@ def _extract_account_summary(lines: list[str]) -> dict:
     for line in lines:
         s = line.strip()
         if re.match(r"ACCOUNT BALANCE\s*:", s, re.IGNORECASE) and "PLUS" not in s.upper():
-            m = re.search(r"^ACCOUNT BALANCE\s*:\s*\$?([\d,.()\-]+)", s, re.IGNORECASE)
+            m = re.search(r"^ACCOUNT BALANCE\s*:\s*" + _AMT, s, re.IGNORECASE)
             if m:
                 summary["account_balance"] = _parse_amount(m.group(1))
         elif re.match(r"ACCRUED INTEREST\s*:", s, re.IGNORECASE):
-            m = re.search(r"^ACCRUED INTEREST\s*:\s*\$?([\d,.()\-]+)", s, re.IGNORECASE)
+            m = re.search(r"^ACCRUED INTEREST\s*:\s*" + _AMT, s, re.IGNORECASE)
             if m:
                 summary["accrued_interest"] = _parse_amount(m.group(1))
         elif re.match(r"ACCRUED PENALTY\s*:", s, re.IGNORECASE):
-            m = re.search(r"^ACCRUED PENALTY\s*:\s*\$?([\d,.()\-]+)", s, re.IGNORECASE)
+            m = re.search(r"^ACCRUED PENALTY\s*:\s*" + _AMT, s, re.IGNORECASE)
             if m:
                 summary["accrued_penalty"] = _parse_amount(m.group(1))
     return summary
@@ -408,70 +419,109 @@ def _build_tc_summary(transactions: list[dict]) -> dict:
 # Wage & Income items
 # ---------------------------------------------------------------------------
 
+# Information-return headings, in every layout the IRS Online Account has served:
+#   legacy / Sept-2026:  "Form W-2 Wage and Tax Statement"      "Schedule K-1 1065"
+#   Oct-2026 onward:     "Form W-2: Wage and Tax Statement"     "Schedule K-1 1065: Partner's Share of ..."
+# The form token is matched explicitly so field lines such as "Form Number: 1040" or
+# "Schedule K-3: Box checked" are never mistaken for a heading.
+_WI_HEADING_RE = re.compile(
+    r"^\s*(?P<code>Form\s+(?:W-?\d+[A-Z]?|\d{3,4}[A-Z]?(?:-[A-Z]{1,4})?)"
+    r"|Schedule\s+K-1(?:\s+\(?\d{4}(?:-[A-Z]+)?\)?)?)"
+    r"(?:\s*:\s*|\s+-\s+|\s+)?(?P<title>[A-Za-z][^:]*)?\s*$"
+)
+# "Label: value" with either dot leaders (legacy) or a run of spaces (2026 layouts).
+_WI_FIELD_RE = re.compile(r"^\s*(?P<label>[^:]{2,90}?)\s*:(?:\.+|\s+)\s*(?P<value>\S.*?)\s*$")
+_WI_ID_RE = re.compile(r"Identification Number(?:\s*\([^)]*\))?\s*$", re.IGNORECASE)
+_WI_SKIP_LABELS = ("name", "name (cont.)", "street address", "street address (cont.)", "city, state and zip code")
+_WI_NARRATIVE = ("reflect the amount", "adjusted", "following items", "do not show")
+
+
+def _wi_form_code(code: str) -> str:
+    """'Form W-2' -> 'W-2'; 'Form 1099-B' -> '1099-B'; 'Schedule K-1 1065' -> 'K-1 (1065)'."""
+    code = re.sub(r"\s+", " ", code.strip())
+    m = re.match(r"Schedule K-1(?: \(?(\d{4}(?:-[A-Z]+)?)\)?)?$", code)
+    if m:
+        return f"K-1 ({m.group(1)})" if m.group(1) else "K-1"
+    return re.sub(r"^Form ", "", code)
+
+
 def _extract_wage_income(lines: list[str], doc_type: str) -> list[dict]:
-    """Extract W-2, 1099, etc. blocks from Wage/Income or RoA transcripts."""
+    """Extract W-2, 1099, 1098, 5498, Schedule K-1 and similar blocks from Wage & Income
+    (and Record of Account) transcripts.
+
+    Each item: form (normalised heading), form_code, ein (payer/filer/partnership id as
+    shown — the IRS masks it), name (payer), recipient_name, recipient_tin,
+    submission_type, and fields {label: value}. Dollar values are signed floats;
+    indicator values ("Box checked", "Original") stay strings.
+    """
     items: list[dict] = []
     if doc_type not in ("IRS-WageIncome-Transcript", "IRS-RecordOfAccount-Transcript"):
         return items
 
-    ein_re = re.compile(
-        r"(?:Employer Identification Number|"
-        r"Corporation.*?Federal Identification Number|"
-        r"Trustee.*?Federal Identification Number|"
-        r"Payer.*?Federal Identification Number)"
-        r"\s*\(.*?\)\s*:\s*(\S+)",
-        re.IGNORECASE
-    )
-    # "Some field label:...........$NNN.NN"
-    amount_re = re.compile(r"^(.+?)\s*:\.+\s*([\$\-\d,.()\s]+)\s*$")
-
     in_wage_section = (doc_type == "IRS-WageIncome-Transcript")
-    current_form: Optional[dict] = None
+    current: Optional[dict] = None
 
     for line in lines:
         stripped = line.strip()
+        if not stripped:
+            continue
 
         # RoA: wage/return-section marker
         if re.match(r"SSN Provided\s*:", stripped, re.IGNORECASE):
             in_wage_section = True
-
         if not in_wage_section:
             continue
+        if "Sensitive Taxpayer Data" in stripped or re.match(r"Page \d+/\d+$", stripped):
+            continue
 
-        # Form heading: line that is exclusively a form name (indented or not)
-        # Matches e.g. "                       Form W-2 Wage and Tax Statement"
-        # or "Form 8863 - Education Credits ..."
-        # but NOT lines with a colon (field: value lines)
-        m_form = re.match(r"^\s*(Form\s+\S[^:]+?)\s*$", line)
-        if m_form:
-            label = m_form.group(1).strip()
-            # Skip narrative lines
-            if any(skip in label.lower() for skip in
-                   ["reflect the amount", "adjusted", "following items", "do not show"]):
+        m_head = _WI_HEADING_RE.match(line)
+        if m_head:
+            title = (m_head.group("title") or "").strip()
+            if not any(n in title.lower() for n in _WI_NARRATIVE):
+                if current:
+                    items.append(current)
+                code = re.sub(r"\s+", " ", m_head.group("code").strip())
+                current = {
+                    "form": f"{code} {title}".strip(),
+                    "form_code": _wi_form_code(code),
+                    "ein": "", "name": "", "recipient_name": "", "recipient_tin": "",
+                    "submission_type": "", "fields": {},
+                }
                 continue
-            if current_form:
-                items.append(current_form)
-            current_form = {"form": label, "ein": "", "name": "", "fields": {}}
+
+        if current is None:
             continue
 
-        if current_form is None:
+        m_f = _WI_FIELD_RE.match(line)
+        if not m_f:
+            continue
+        label, value = m_f.group("label").strip(), m_f.group("value").strip()
+        low = label.lower()
+
+        if _WI_ID_RE.search(label):
+            if not current["ein"]:
+                current["ein"] = value
+            elif not current["recipient_tin"]:
+                current["recipient_tin"] = value
+            continue
+        if low == "name":
+            if not current["name"]:
+                current["name"] = value
+            elif not current["recipient_name"]:
+                current["recipient_name"] = value
+            continue
+        if low in _WI_SKIP_LABELS:
+            continue
+        if low == "submission type":
+            current["submission_type"] = value
             continue
 
-        m_ein = ein_re.search(line)
-        if m_ein:
-            current_form["ein"] = m_ein.group(1).strip()
-            continue
+        current["fields"][label] = (
+            _parse_amount(value) if re.fullmatch(r"\(?-?\$?-?[\d,]+(?:\.\d+)?\)?", value) else value
+        )
 
-        m_amt = amount_re.match(line)
-        if m_amt:
-            fname = m_amt.group(1).strip()
-            vstr  = m_amt.group(2).strip()
-            current_form["fields"][fname] = (
-                _parse_amount(vstr) if re.search(r"[\d$]", vstr) else vstr
-            )
-
-    if current_form:
-        items.append(current_form)
+    if current:
+        items.append(current)
 
     return items
 
@@ -605,7 +655,7 @@ def _print_table(data: dict, out=sys.stdout) -> None:
     if wi:
         print(f"\n  Wage/Income Items ({len(wi)} information returns):", file=out)
         for item in wi:
-            print(f"    {item.get('form', '')}  EIN: {item.get('ein', '')}", file=out)
+            print(f"    {item.get('form_code') or item.get('form', ''):<12} {item.get('name', '')[:28]:<28}  ID: {item.get('ein', '')}", file=out)
 
     print("=" * 72 + "\n", file=out)
 

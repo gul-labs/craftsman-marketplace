@@ -1,0 +1,18 @@
+                             This Product Contains Sensitive Taxpayer Data
+                                    Wage and Income Transcript
+                                                          Request Date:                 09-03-2026
+                                                          Tax Period Requested:         December, 2025
+                                Form W-2 Wage and Tax Statement
+Employer:
+Employer Identification Number (EIN):                                       XXXXX0001
+Name:                                                                       SAMP EMPL
+Submission Type:                                                                Original document
+Wages, Tips and Other Compensation:                                         $12,500.00
+Federal Income Tax Withheld:                                                 $1,100.00
+                                        Schedule K-1 1065
+Employer Identification Number:                                             XXXXX0003
+Name:                                                                       SAMP FUN LP
+Submission Type:                                                                Amended document
+Schedule K-3:                                                                        Box checked
+Ordinary Income K-1:                                                                  -$997.00
+Interest:                                                                                $64.00

@@ -1,0 +1,51 @@
+                            This Product Contains Sensitive Taxpayer Data
+                             Wage and Income Transcript
+                                                             Request Date:                 10-14-2026
+                                                             Response Date:                10-14-2026
+                                                             Tracking Number:            100000000001
+                                                             Tax Period Requested:         12-31-2025
+                                                             TIN Provided:                XXX-XX-1234
+                                  Form W-2: Wage and Tax Statement
+Employer
+Employer Identification Number (EIN):                                                     XXXXX0001
+Name:                                                                                      SAMP EMPL
+Name (cont.):
+Street Address:                                                                               1 MAIN
+City, State and Zip Code:
+Employee
+Taxpayer Identification Number (TIN):                                                    XXX-XX-1234
+Name:                                                                                         SAMP TA
+Street Address:                                                                                100
+Submission Type:                                                                  Original document
+Wages, Tips and Other Compensation
+Wages, Tips and Other Compensation:                                                       $12,500.00
+Federal Income Tax Withheld:                                                               $1,100.00
+Code "AA" Designated Roth Contributions under a Section
+  401(k) Plan:                                                                              $250.00
+Retirement Plan Indicator:                                                    Yes - retirement plan
+                 Form 1099-B: Proceeds from Broker and Barter Exchange Transactions
+Payer
+Payer's Federal Identification Number (FIN):                                              XXXXX0002
+Name:                                                                                  SAMP BROK LL
+Recipient
+Recipient's Identification Number:                                                       XXX-XX-1234
+Name:                                                                                         SAMP TA
+Submission Type:                                                                Original document
+Proceeds:                                                                                 $10,000.00
+Cost or Basis:                                                                             $8,000.00
+                  Schedule K-1 1065: Partner's Share of Income, Deductions, Credits, etc.
+Partnership
+Employer Identification Number (EIN):                                                     XXXXX0003
+Name:                                                                                    SAMP FUN LP
+Partner
+Taxpayer Identification Number (TIN):                                                    XXX-XX-1234
+Name:                                                                                         SAMP TA
+Submission Type:                                                                Original document
+Partner Share of Current Year Income, Deductions, Credits, and Other Items
+Schedule K-3:                                                                                   Box checked
+Nonrecourse Ending:                                                                        $1,500.00
+Ordinary Business Income (loss):                                                            -$997.00
+Real Estate:                                                                              -$3,250.00
+Interest:                                                                                     $64.00
+                            This Product Contains Sensitive Taxpayer Data
+                                                                                              Page 1/1
