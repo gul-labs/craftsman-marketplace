@@ -1,0 +1,11 @@
+                    INTERNAL REVENUE SERVICE
+                  THIS PRODUCT CONTAINS SENSITIVE TAXPAYER DATA
+                          Wage and Income Transcript
+Tax Period Requested: December, 2022
+Form W-2 Wage and Tax Statement
+Employer Identification Number (EIN):XXXXX0001
+Wages, Tips and Other Compensation:.....................$95,000.00
+Federal Income Tax Withheld:............................$15,250.00
+Form 1099-INT Interest Income
+Payer's Federal Identification Number (FIN):XXXXX0004
+Interest:...................................................$412.00

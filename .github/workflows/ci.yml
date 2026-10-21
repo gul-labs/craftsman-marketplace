@@ -80,6 +80,7 @@ jobs:
             evals/validate_stock_issuance.py \
             tools/parse-verify/test_verify.py \
             tools/pdf-extractor/test_pdf_extract.py \
+            tools/transcript-parser/test_transcript_parser.py \
             tools/form-parser/test_form_parser.py \
             tools/form-parser/invariants.py \
             tools/workspace-doctor/test_doctor.py \

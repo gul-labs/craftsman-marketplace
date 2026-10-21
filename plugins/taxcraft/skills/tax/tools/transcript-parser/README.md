@@ -26,7 +26,8 @@ with descriptions and significance notes).
 | `transcript_parser.py` | Main library + CLI |
 | `tc_codes.json` | 36 TC codes with `description` + `significance` notes |
 | `README.md` | This file |
-| `samples/` | Sample transcript text files for testing (not committed with real TINs) |
+| `samples/` | Synthetic transcript text fixtures, one per layout (no real names, TINs or amounts) |
+| `test_transcript_parser.py` | Offline self-test over `samples/` — `python3 -B test_transcript_parser.py`, exit 0 = pass |
 
 ## Library usage
 
@@ -106,6 +107,50 @@ brew install poppler   # macOS
   "anomalies": []
 }
 ```
+
+### `wage_income_items` (Wage and Income and Record of Account transcripts)
+
+One object per information return on the transcript:
+
+```json
+{
+  "form": "Schedule K-1 1065 Partner's Share of Income, Deductions, Credits, etc.",
+  "form_code": "K-1 (1065)",
+  "ein": "XXXXX0003",
+  "name": "SAMP FUN LP",
+  "recipient_name": "SAMP TA",
+  "recipient_tin": "XXX-XX-1234",
+  "submission_type": "Original document",
+  "fields": {
+    "Schedule K-3": "Box checked",
+    "Ordinary Business Income (loss)": -997.0,
+    "Real Estate": -3250.0,
+    "Interest": 64.0
+  }
+}
+```
+
+| Field | Description |
+|---|---|
+| `form` | Heading as printed, colon removed |
+| `form_code` | `W-2`, `1099-B`, `1098`, `5498`, `3922`, `K-1 (1065)`, … — group and count on this |
+| `ein` | First identification number in the block: employer, payer, filer or partnership (masked by the IRS) |
+| `name` / `recipient_name` | First and second `Name:` lines — payer, then recipient. The IRS truncates names |
+| `recipient_tin` | Second identification number in the block |
+| `submission_type` | `Original document`, `Amended document`, `Corrected document` |
+| `fields` | Every other `Label: value` line. Dollar values are signed floats; indicators stay strings. Address lines are not copied |
+
+**Layouts read.** The IRS Online Account has changed its Wage and Income layout more than once;
+all of these parse to the same schema:
+
+| Layout | Heading | Value line |
+|---|---|---|
+| Legacy | `Form W-2 Wage and Tax Statement` | `Wages, Tips and Other Compensation:......$95,000.00` |
+| 2026 plain | `Form W-2 Wage and Tax Statement`, `Schedule K-1 1065` | `Wages, Tips and Other Compensation:   $12,500.00` |
+| October 2026 | `Form W-2: Wage and Tax Statement`, `Schedule K-1 1065: Partner's Share of …` | same |
+
+Amounts keep their sign in every position the IRS prints it: `-$20,000.00`, `$-85.00`, `($8,211.00)`.
+A credit balance is negative.
 
 ### `tc_transactions` field detail
 

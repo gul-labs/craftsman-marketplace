@@ -24,7 +24,20 @@ not a synonym for "public."
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- `taxcraft` `tools/transcript-parser`: Wage and Income transcripts in the layout the IRS Online
+  Account serves from October 2026 (`Form W-2: Wage and Tax Statement`, `Schedule K-1 1065: …`)
+  returned no `wage_income_items`. The block parser now reads all three layouts — legacy dot
+  leaders, the plain-heading 2026 layout, and the colon-heading layout — and recognises
+  Schedule K-1 and Form 3922 blocks, which earlier versions skipped in every layout. Each item
+  now also carries `form_code`, `recipient_name`, `recipient_tin` and `submission_type`.
+- `taxcraft` `tools/transcript-parser`: a credit balance (`Account balance: -$20,000.00`) parsed
+  as `0.0` because the sign preceded the `$`. All labelled amounts now keep their sign.
+- `taxcraft` `tools/transcript-parser`: `tax_period` was empty for 2026 transcripts that print
+  the period as `12-31-2025`.
+- New offline self-test `tools/transcript-parser/test_transcript_parser.py` with synthetic
+  fixtures for each layout; added to CI.
 
 ## [0.11.1] (2026-10-01)
 
