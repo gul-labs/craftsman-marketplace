@@ -121,6 +121,9 @@ commands from memory; that file is the SSOT.
      `templates/<name>.template` only when the requested scope authorizes
      workspace changes; never mutate the workspace merely to answer a question.
    - Do not improvise entity slugs without `workspace-profile/slugs.md`.
+   - Before proposing a changed treatment, calling an item open, or issuing any
+     reviewer brief, read the scope's settled-positions register (see
+     "Settled-positions rule" below).
 3. If the user's intent is already explicit, route directly to the relevant
    sub-skill. Otherwise show the router:
 
@@ -160,7 +163,7 @@ Or describe what you need.
 | `migrate.md` | Convert legacy workspace to canonical layout (folders + filenames) |
 | `layout.md` | Target workspace tree; regarded vs. disregarded placement rules |
 | `portability.md` | What may live in the skill vs. the workspace; the no-jurisdiction-in-a-schema rule |
-| `supersession.md` | How a changed answer is recorded in prose: operative files state one current answer, reasoning lives in immutable decision memos under `<scope-root>/decisions/`, correction vs. decision, retain vs. prune, order of operations, register rows |
+| `supersession.md` | How a changed answer is recorded in prose: operative files state one current answer, reasoning lives in immutable decision memos under `<scope-root>/decisions/`, correction vs. decision, retain vs. prune, order of operations, register rows; the settled-positions protocol (§8): register, Basis provenance, reopen triggers, owner-approved change, what a ledger Lock does and does not prove |
 | `naming.md` | Folder slugs, canonical document filenames, slug registry, collision rules, cross-workspace K-1 pointers |
 | `parsing.md` | PDF read discipline, parsed-cache index, TTL classes, per-doctype JSON schemas |
 | `intake.md` | Year-scoped document ingestion (canonicalize → parse → update workpaper) |
@@ -197,7 +200,7 @@ Or describe what you need.
 | `tools/dep-check/` | One-shot dependency preflight: `python3 -B "$TAX_SKILL/tools/dep-check/dep_check.py"` — checks install integrity, poppler, validator packages, optional rungs; prints the platform-correct fix command; exits 1 when a required dependency is missing. Never installs anything |
 | `tools/form-parser/` | Registry-driven parser for W-2, W-2G, 1099-INT/DIV/B/NEC/MISC/R/G/K/SA, 1099-Composite, SSA-1099, 1098/-T/-E, 5498/-SA, 1095-A: AcroForm → vision skeleton (`--vision-prompt`) → gated text → `--merge` → invariants; emits the schema-2 field envelope. Box definitions and invariants live in `tools/form-parser/doc_types.py` |
 | `tools/README.md` | 11 shipped tools (pdf-extractor, form-parser, chase-statement-parser, ibkr-parser, k1-parser, return-parser, transcript-parser, coa-categorizer, parse-verify, workspace-doctor, dep-check) — see `tools/README.md` |
-| `tools/workspace-doctor/` | Report-only lint: runs `python3 -B "$TAX_SKILL/tools/workspace-doctor/doctor.py"` from the workspace root; reports missing canonical files (e.g. `workspace-profile/slugs.md`), naming violations, empty parse caches, sync-conflict duplicates, unprocessed corporate docs, in-place prose history in operative files and broken decision-memo lineage (`supersession.md`) — never modifies anything |
+| `tools/workspace-doctor/` | Report-only lint: runs `python3 -B "$TAX_SKILL/tools/workspace-doctor/doctor.py"` from the workspace root; reports missing canonical files (e.g. `workspace-profile/slugs.md`), naming violations, empty parse caches, sync-conflict duplicates, unprocessed corporate docs, in-place prose history in operative files, broken decision-memo lineage, and malformed settled-positions registers (`supersession.md`) — never modifies anything |
 
 Read sub-skill files via Read tool as needed. Never load all upfront.
 
@@ -329,6 +332,33 @@ acted on in between, is pruned after one closure line in `open-questions.md`; an
 answer that was acted upon or a judgment that changed keeps its superseded memo.
 Evidence is never deleted. Full rule, buckets, and order of operations:
 `supersession.md`.
+
+## Settled-positions rule (STRICT)
+
+**`<scope-root>/decisions/settled-positions.md` is the canonical owner of
+settlement state for its scope** (`workspace-profile/decisions/settled-positions.md`
+for cross-entity items): which items the owner has settled, on what basis, and
+what would reopen each one. Read it before you propose a changed treatment, call
+an item open, recompute it or put a new exposure figure on it, or issue any
+reviewer brief. A settlement recorded only in a workpaper or tracker is reported
+for entry in the register, not re-argued.
+
+- A settled item is reopened only when its `Reopen only if` condition is met by
+  new facts about that item, and only with the owner's decision. Cite the
+  settlement ID and the specific new evidence; then ask.
+- A rule, authority, or doubt that merely bears on a settled item is reported to
+  the owner as a risk against its ID. The item is not reopened and nothing
+  changes until the owner decides.
+- Every reviewer brief includes the register and says that settled rows are
+  reported as risks, not reopened. Reviewers stay free to report contradictions.
+- An owner fact settles the fact, not every legal conclusion that depends on it.
+  `analysis` and `verified` are provenance categories, not owner approval.
+- A changed answer is a new decision memo naming its predecessor, then a
+  register-row update; in an open period the ledger entry and its Lock change
+  together, in a closed period a correcting entry is posted instead. A matching
+  Lock detects drift; it does not prove authorization.
+
+Full protocol: `supersession.md` §8. Schema: `templates/settled-positions.md.template`.
 
 ## Workspace layout
 

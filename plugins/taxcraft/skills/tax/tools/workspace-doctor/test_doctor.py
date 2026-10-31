@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Fixture tests for workspace-doctor's content-reading checks: entity trackers,
-in-place prose history, and decision-memo lineage (supersession.md).
+in-place prose history, decision-memo lineage, and the settled-positions
+register (supersession.md).
 
 Run:  python3 -B test_doctor.py   (stdlib unittest; no workspace needed)
 """
@@ -359,6 +360,286 @@ class DecisionMemoLineageCheck(unittest.TestCase):
             self.assertNotIn("SECRET", line)
 
 
+# Invented fixture data only (portability.md): a fictional entity, round amounts.
+REG_DIR = "entities/alpha-llc/decisions"
+REG = f"{REG_DIR}/settled-positions.md"
+EV = "entities/alpha-llc/tax/FY2025/open-questions.md"
+REG_HEADER = (
+    "| ID | Anchor | Entry date | Entry | Position | Settled | Basis | Reopen only if | Evidence | Lock |\n"
+    "|---|---|---|---|---|---|---|---|---|---|\n"
+)
+LEDGER_ROW = (
+    "| `ALP-S001` | ledger | 2026-01-15 | Example vendor invoice | office expense | "
+    "2026-02-01 owner — Q1 | owner decision | the invoice names another client | "
+    f"`{EV}` | Expenses:Office 100.00 USD; Liabilities:Card -100.00 USD |\n"
+)
+NONLEDGER_ROW = (
+    "| `ALP-S002` | non-ledger | — | Home-office method | not claimed | "
+    "2026-02-01 owner — Q2 | owner fact; qualification is analysis | the owner revives it | "
+    f"`{EV}` | — |\n"
+)
+
+
+def _register(rows: str = LEDGER_ROW + NONLEDGER_ROW, *, before: str = "", after: str = "") -> str:
+    return f"# Settled positions\n\n{before}## Register\n\n{REG_HEADER}{rows}{after}"
+
+
+class SettledPositionsRegisterCheck(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        _write(self.root, EV, "# Q\n")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def paths(self):
+        return doctor.check_settled_positions_registers(self.root).paths
+
+    def rules(self, text: str) -> list[str]:
+        return [rule for _ln, rule in doctor.settled_register_problems(text, self.root)]
+
+    def test_no_register_is_clean(self):
+        self.assertEqual(self.paths(), [])
+
+    def test_valid_register_is_clean(self):
+        _write(self.root, REG, _register())
+        self.assertEqual(self.paths(), [])
+
+    def test_extra_sections_tables_and_reordered_columns_are_allowed(self):
+        reordered = (
+            "| Anchor | ID | Notes | Entry date | Entry | Position | Settled | Basis | Reopen only if | Evidence | Lock |\n"
+            "|---|---|---|---|---|---|---|---|---|---|---|\n"
+            "| non-ledger | `ALP-S002` | n | — | Home-office method | not claimed | 2026-02-01 owner | owner decision | "
+            f"the owner revives it | `{EV}` | — |\n"
+        )
+        text = ("# S\n\n## Register\n\n" + reordered +
+                "\n## Not settled\n\n| Item | Status | Where |\n|---|---|---|\n| x | open | y |\n")
+        self.assertEqual(self.rules(text), [])
+
+    def test_duplicate_identical_postings_are_valid(self):
+        row = LEDGER_ROW.replace("Expenses:Office 100.00 USD;", "Expenses:Office 50.00 USD; Expenses:Office 50.00 USD;")
+        self.assertEqual(self.rules(_register(row)), [])
+
+    def test_missing_table(self):
+        self.assertIn("found 0", self.rules("# S\n\nno table\n")[0])
+
+    def test_two_designated_tables(self):
+        self.assertIn("found 2", self.rules(_register() + "\n" + REG_HEADER + LEDGER_ROW)[0])
+
+    def test_missing_required_header(self):
+        text = _register().replace("| Lock |\n|---|---|---|---|---|---|---|---|---|---|", "|\n|---|---|---|---|---|---|---|---|---|")
+        self.assertIn("found 0", self.rules(text)[0])
+
+    def test_duplicate_header(self):
+        text = _register().replace("| Lock |\n|---|", "| Lock | Basis |\n|---|---|", 1)
+        self.assertEqual(self.rules(text), ["duplicate header"])
+
+    def test_separator_width_mismatch(self):
+        text = _register().replace("|---|---|---|---|---|---|---|---|---|---|", "|---|---|---|---|---|---|---|---|---|---|---|")
+        self.assertEqual(self.rules(text), ["separator width differs from the header"])
+
+    def test_pipe_inside_cell_escaped_or_not(self):
+        for bad in ("office \\| supplies", "office | supplies"):
+            row = LEDGER_ROW.replace("office expense", bad)
+            self.assertIn("malformed row (cell count, or a pipe inside a cell)", self.rules(_register(row)))
+
+    def test_bad_and_duplicate_ids(self):
+        self.assertIn("ID is not <PREFIX>-S<NNN>", self.rules(_register(LEDGER_ROW.replace("ALP-S001", "alp-1"))))
+        self.assertIn("duplicate ID", self.rules(_register(LEDGER_ROW + LEDGER_ROW)))
+
+    def test_anchor_must_be_explicit(self):
+        self.assertIn("Anchor is not ledger or non-ledger",
+                      self.rules(_register(LEDGER_ROW.replace("| ledger |", "| |"))))
+
+    def test_ledger_row_with_empty_lock(self):
+        row = LEDGER_ROW.replace("Expenses:Office 100.00 USD; Liabilities:Card -100.00 USD", "—")
+        self.assertIn("ledger row with an empty or malformed Lock", self.rules(_register(row)))
+
+    def test_ledger_row_with_malformed_lock(self):
+        for lock in ("Expenses:Office 100.00", "Office 100.00 USD", "Expenses:Office one USD"):
+            row = LEDGER_ROW.replace("Expenses:Office 100.00 USD", lock)
+            self.assertIn("ledger row with an empty or malformed Lock", self.rules(_register(row)), lock)
+
+    def test_ledger_row_with_bad_entry_date(self):
+        for d in ("—", "2026-02-30", "01/15/2026"):
+            row = LEDGER_ROW.replace("2026-01-15", d)
+            self.assertIn("ledger row without a valid YYYY-MM-DD Entry date", self.rules(_register(row)), d)
+
+    def test_non_ledger_row_with_lock_or_date(self):
+        row = NONLEDGER_ROW.replace("| non-ledger | — |", "| non-ledger | 2026-01-15 |")
+        self.assertIn("non-ledger row carries an Entry date or Lock", self.rules(_register(row)))
+        row = NONLEDGER_ROW.replace("| — |\n", "| Expenses:Office 1.00 USD |\n")
+        self.assertIn("non-ledger row carries an Entry date or Lock", self.rules(_register(row)))
+
+    def test_empty_required_fields(self):
+        row = NONLEDGER_ROW.replace("| the owner revives it |", "| — |")
+        self.assertIn("Reopen only if is empty", self.rules(_register(row)))
+
+    def test_basis_outside_vocabulary(self):
+        row = NONLEDGER_ROW.replace("owner fact; qualification is analysis", "agreed")
+        self.assertIn("Basis names none of owner decision / owner fact / analysis / verified",
+                      self.rules(_register(row)))
+
+    def test_evidence_syntax(self):
+        for cell in (EV, f"`{EV}`, `{EV}`", "", f"`{EV}`; see Q1"):
+            row = LEDGER_ROW.replace(f"`{EV}`", cell)
+            self.assertIn("Evidence is not a ;-separated list of backticked paths", self.rules(_register(row)), cell)
+
+    def test_evidence_absolute_missing_directory_and_escape(self):
+        cases = {
+            "/etc/hosts": "Evidence path is not workspace-relative",
+            "entities/alpha-llc/tax/FY2025/missing.md": "Evidence path is missing or not a file",
+            "entities/alpha-llc/tax": "Evidence path is missing or not a file",
+            "../outside.md": "Evidence path escapes the workspace",
+        }
+        for path, rule in cases.items():
+            row = LEDGER_ROW.replace(f"`{EV}`", f"`{path}`")
+            self.assertIn(rule, self.rules(_register(row)), path)
+
+    def test_evidence_symlink_escaping_the_workspace(self):
+        with tempfile.TemporaryDirectory() as outside:
+            (Path(outside) / "secret.md").write_text("x", encoding="utf-8")
+            link = self.root / "entities/alpha-llc/link.md"
+            link.symlink_to(Path(outside) / "secret.md")
+            row = LEDGER_ROW.replace(f"`{EV}`", "`entities/alpha-llc/link.md`")
+            self.assertIn("Evidence path escapes the workspace", self.rules(_register(row)))
+
+    def test_cross_scope_evidence_inside_the_workspace_is_valid(self):
+        other = "entities/beta-llc/contracts/agreement.md"
+        _write(self.root, other, "x")
+        row = LEDGER_ROW.replace(f"`{EV}`", f"`{EV}`; `{other}`")
+        self.assertEqual(self.rules(_register(row)), [])
+
+    def test_row_stranded_by_blank_line_is_reported(self):
+        text = _register(LEDGER_ROW + "\n" + NONLEDGER_ROW)
+        self.assertIn("row-like line outside the register table", self.rules(text))
+
+    def test_row_with_lost_leading_pipe_is_reported(self):
+        text = _register(LEDGER_ROW + "\n" + NONLEDGER_ROW.lstrip("| "))
+        self.assertIn("row-like line outside the register table", self.rules(text))
+
+    def test_table_in_fenced_code_is_not_designated(self):
+        text = "# S\n\n```\n" + REG_HEADER + LEDGER_ROW + "```\n"
+        self.assertIn("found 0", self.rules(text)[0])
+
+    def test_lock_with_empty_component_or_cost_annotation(self):
+        for lock in ("Expenses:Office 100.00 USD;; Liabilities:Card -100.00 USD",
+                     "Expenses:Office 100.00 USD; Liabilities:Card -100.00 USD;",
+                     "Assets:Brokerage 1 SHARE {100.00 USD}; Liabilities:Card -100.00 USD",
+                     "Assets:Cash 100.00 EUR @ 1.10 USD; Liabilities:Card -110.00 USD"):
+            row = LEDGER_ROW.replace("Expenses:Office 100.00 USD; Liabilities:Card -100.00 USD", lock)
+            self.assertIn("ledger row with an empty or malformed Lock", self.rules(_register(row)), lock)
+
+    def test_unresolvable_evidence_is_a_rule_not_a_crash(self):
+        loop = self.root / "entities/alpha-llc/loop.md"
+        loop.symlink_to(loop)
+        for path in ("entities/alpha-llc/loop.md", "entities/alpha-llc/bad\x00name.md"):
+            row = LEDGER_ROW.replace(f"`{EV}`", f"`{path}`")
+            rules = self.rules(_register(row))
+            self.assertTrue(any(r.startswith("Evidence path") for r in rules), (path, rules))
+            for r in rules:
+                self.assertNotIn("loop", r)
+                self.assertNotIn("bad", r)
+
+    def test_table_inside_longer_fence_is_not_designated(self):
+        text = "# S\n\n````\n```\n" + REG_HEADER + LEDGER_ROW + "```\n````\n"
+        self.assertIn("found 0", self.rules(text)[0])
+
+    def test_row_with_lost_pipe_and_no_backticks_is_reported(self):
+        stranded = NONLEDGER_ROW.lstrip("| ").replace("`ALP-S002`", "ALP-S002")
+        self.assertIn("row-like line outside the register table", self.rules(_register(LEDGER_ROW + "\n" + stranded)))
+
+    def test_row_above_the_table_or_under_another_heading_is_reported(self):
+        above = _register(LEDGER_ROW, before=NONLEDGER_ROW + "\n")
+        below = _register(LEDGER_ROW, after="\n## Other\n\n" + NONLEDGER_ROW)
+        for text in (above, below):
+            self.assertIn("row-like line outside the register table", self.rules(text))
+
+    def test_stranded_row_with_reordered_columns_is_reported(self):
+        header = (
+            "| Anchor | Entry date | ID | Entry | Position | Settled | Basis | Reopen only if | Evidence | Lock |\n"
+            "|---|---|---|---|---|---|---|---|---|---|\n"
+        )
+        row = (f"| non-ledger | — | `ALP-S002` | Home-office method | not claimed | 2026-02-01 owner | owner decision | "
+               f"the owner revives it | `{EV}` | — |\n")
+        text = "# S\n\n## Register\n\n" + header + row + "\n" + row
+        self.assertEqual(self.rules(text), ["row-like line outside the register table"])
+        no_pipe = row.lstrip("| ")
+        self.assertEqual(self.rules("# S\n\n## Register\n\n" + header + row + "\n" + no_pipe),
+                         ["row-like line outside the register table"])
+
+    def test_stranded_row_with_invalid_id_is_reported(self):
+        stranded = NONLEDGER_ROW.replace("ALP-S002", "ALP-S00X")
+        self.assertIn("row-like line outside the register table", self.rules(_register(LEDGER_ROW + "\n" + stranded)))
+
+    def test_ancillary_tables_and_prose_mentions_are_not_stranded_rows(self):
+        after = ("\n## Not settled\n\n| Item | Status | Where |\n|---|---|---|\n"
+                 "| Cruise charge | recommended; see ALP-S001 | `x` |\n\nALP-S001 was settled by the owner.\n")
+        self.assertEqual(self.rules(_register(after=after)), [])
+        ten_wide = ("\n## Other\n\n| A | B | C | D | E | F | G | H | I | J |\n|---|---|---|---|---|---|---|---|---|---|\n"
+                    "| a | b | c | d | e | f | g | h | i | j |\n")
+        self.assertEqual(self.rules(_register(after=ten_wide)), [])
+
+    def test_ancillary_rows_shaped_like_settlement_rows_are_not_stranded(self):
+        id_item = ("\n## Not settled\n\n| Item | Status | Where |\n|---|---|---|\n"
+                   "| ALP-S002 | reopened, owner decision pending | `x` |\n")
+        ledger_cell = ("\n## Other\n\n| A | B | C | D | E | F | G | H | I | J |\n|---|---|---|---|---|---|---|---|---|---|\n"
+                       "| a | ledger | c | d | e | f | g | h | i | j |\n")
+        for after in (id_item, ledger_cell):
+            self.assertEqual(self.rules(_register(after=after)), [], after)
+
+    def test_stranded_row_over_a_mismatched_separator_is_reported(self):
+        after = "\n" + NONLEDGER_ROW + "|---|---|---|\n"
+        self.assertIn("row-like line outside the register table", self.rules(_register(LEDGER_ROW, after=after)))
+
+    def test_settlement_row_inside_a_ten_column_ancillary_table_is_reported(self):
+        after = ("\n## Other\n\n| A | B | C | D | E | F | G | H | I | J |\n|---|---|---|---|---|---|---|---|---|---|\n"
+                 "| a | ledger | c | d | e | f | g | h | i | j |\n" + NONLEDGER_ROW)
+        self.assertEqual(self.rules(_register(LEDGER_ROW, after=after)), ["row-like line outside the register table"])
+
+    def test_settlement_row_dropped_into_an_ancillary_table_is_reported(self):
+        after = "\n## Not settled\n\n| Item | Status | Where |\n|---|---|---|\n" + NONLEDGER_ROW
+        self.assertIn("row-like line outside the register table", self.rules(_register(LEDGER_ROW, after=after)))
+
+    def test_findings_name_path_and_line_never_content(self):
+        _write(self.root, REG, _register(LEDGER_ROW.replace("Expenses:Office 100.00 USD", "SECRETACCT 7")))
+        hits = self.paths()
+        self.assertEqual(len(hits), 1)
+        self.assertTrue(hits[0].startswith(f"{REG}:7"), hits[0])
+        for h in hits:
+            self.assertNotIn("SECRET", h)
+            self.assertNotIn("ALP-S001", h)
+
+    def test_workspace_profile_register_is_checked(self):
+        _write(self.root, "workspace-profile/decisions/settled-positions.md", "# S\n")
+        self.assertEqual(len(self.paths()), 1)
+
+    def test_privileged_register_is_never_walked(self):
+        _write(self.root, "entities/attorney-client-privileged-x/decisions/settled-positions.md", "# S\n")
+        self.assertEqual(self.paths(), [])
+
+    def test_register_is_not_a_memo(self):
+        _write(self.root, REG, _register())
+        _write(self.root, f"{REG_DIR}/2026-02-01 - office.md", _memo("DEC-1", "none"))
+        self.assertEqual(doctor.check_decision_memo_lineage(self.root).paths, [])
+
+    def test_register_is_scanned_as_operative_prose(self):
+        _write(self.root, REG, _register(before="Old answer ~~expense~~\n\n"))
+        _write(self.root, f"{REG_DIR}/2026-02-01 - office.md", "# M\n\n## History\n")
+        hits = doctor.check_in_place_prose_history(self.root).paths
+        self.assertEqual(len(hits), 1)
+        self.assertTrue(hits[0].startswith(REG))
+        self.assertIn("strikethrough", hits[0])
+
+    def test_template_header_matches_doctor(self):
+        tmpl = (Path(__file__).resolve().parents[2] / "templates" / "settled-positions.md.template").read_text(encoding="utf-8")
+        designated = [l for l in tmpl.splitlines() if l.startswith("| ID |")]
+        self.assertEqual(len(designated), 1)
+        self.assertEqual(tuple(c.strip() for c in designated[0].strip().strip("|").split("|")),
+                         doctor.SETTLED_HEADERS)
+
+
 class RunIncludesNewChecks(unittest.TestCase):
     def test_run_lists_both_supersession_groups(self):
         import io, contextlib
@@ -372,6 +653,7 @@ class RunIncludesNewChecks(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertIn("In-place prose history in operative files", out)
         self.assertIn("Decision-memo lineage", out)
+        self.assertIn("Settled-positions register", out)
 
 
 if __name__ == "__main__":

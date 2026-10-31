@@ -1,0 +1,95 @@
+# Settled Positions — <SCOPE NAME>
+
+**As of:** <YYYY-MM-DD>
+**Scope:** `<individual | entities/<slug> | workspace-profile>`
+**ID prefix:** `<PREFIX>` (a short uppercase code for this scope; IDs are `<PREFIX>-S001`, `<PREFIX>-S002`, …)
+
+> **Operative register: the single source of truth for what is settled in this scope.** Read it
+> before calling any item here open, recomputing it, proposing a different treatment, or putting a
+> new exposure figure on it. Include it in every reviewer brief. Protocol: the tax skill's
+> `supersession.md` §8. This file is rewritten in place; it carries no superseded rows, no
+> strikethrough, and no history. The *why* lives in the decision memo or dated evidence each row
+> cites.
+
+## How to use this register
+
+**Reopening.** A row is reopened only when its `Reopen only if` condition is met by new facts about
+*that item*, and only with the owner's decision. Cite the ID and the specific new evidence, then
+ask. A rule or doubt that merely bears on a settled item is reported to the owner as a risk against
+its ID; the item is not reopened.
+
+**Changing a row** (owner's decision first):
+1. Write a new decision memo in this folder naming the memo it supersedes (or `none`); never edit
+   an issued memo body. Stamp the predecessor's `Superseded by`.
+2. Rewrite the row to state the new answer and cite the new memo in `Evidence`.
+3. Ledger rows, open period: change the entry's postings and the `Lock` together, in one change.
+   Closed period: leave the entry and its `Lock` alone; post a correcting entry in the open period
+   and give it its own row and ID.
+4. If the owner un-settles the item, remove the row (and the entry's settlement ID) and list the
+   item under "Not settled".
+
+**What the Lock proves.** A matching `Lock` shows the entry and its row agree. It does not prove
+the owner authorized either: editing both together passes. Authorization is the decision memo.
+
+## Register
+
+<!-- The designated table. Rules (a workspace check fails closed on any of them):
+  - Exactly one table in this file carries all ten headers below. Columns may be reordered, and
+    extra uniquely named columns may be added; none may be duplicated or dropped.
+  - No pipe character inside any cell, escaped or not.
+  - No blank line inside the table: a row after a blank line is stranded, and is reported.
+  - ID: `<PREFIX>-S<NNN>`, unique, never reused.
+  - Anchor: `ledger` (tied to exactly one ledger transaction, which carries only this ID as
+    metadata) or `non-ledger` (a filing position, an election, anything without one entry).
+  - Entry date: the transaction date, YYYY-MM-DD, for a ledger row (not the settlement date);
+    `—` for a non-ledger row.
+  - Entry: a human-readable locator (payee, document, form line). Do not repeat the date or the
+    Lock's amounts.
+  - Position: a short disposition. No facts narrative, calculation, legal argument, or amounts.
+  - Settled: when and by whom (owner, or the board, manager, or officer with authority), and a
+    precise pointer to where that is recorded.
+  - Basis: one or more of `owner decision` · `owner fact` · `analysis` · `verified`. Say which
+    part rests on which; e.g. `owner fact; qualification is analysis, check pending`.
+    Only `owner decision` settles a treatment on its own. An owner fact settles the fact, not
+    every legal conclusion that depends on it. `analysis` and `verified` are provenance, not
+    owner approval.
+  - Reopen only if: the specific new fact about this item that would reopen it.
+  - Evidence: one or more workspace-relative file paths, each in backticks, separated by `;`.
+    Files, not folders; no absolute paths; nothing outside the workspace. Evidence held in
+    another scope's folder stays there and is cited there, never copied. Name every path on
+    every row; no "same as above".
+  - Lock (ledger rows): every posting of the entry as `Account Amount CUR`, separated by `;`.
+    Two identical postings are listed twice. `—` for a non-ledger row. A settled entry carries
+    no cost or price annotations and states every posting's amount; the Lock cannot represent
+    either, so an entry that needs them is not ledger-anchored until the Lock can.
+-->
+
+| ID | Anchor | Entry date | Entry | Position | Settled | Basis | Reopen only if | Evidence | Lock |
+|---|---|---|---|---|---|---|---|---|---|
+| `<PREFIX>-S001` | <ledger or non-ledger> | <YYYY-MM-DD or —> | <locator> | <short disposition> | <YYYY-MM-DD who — pointer> | <basis> | <the new fact that would reopen it> | `<workspace-relative path>` | <Account Amount CUR; Account Amount CUR, or —> |
+
+## Decided — documentation still owed (not settled, not locked)
+
+Decided by the owner, but the evidence the position needs is not yet in hand. Moves to the
+Register when it is.
+
+| Item | Current position | Basis | What is owed | Evidence |
+|---|---|---|---|---|
+| <item> | <position> | <basis> | <document or memo owed> | `<path>` |
+
+## Documented positions — analysis or verified facts, not owner decisions
+
+Reasoned or document-backed, but not decided by the owner. A reviewer may challenge these on the
+merits.
+
+| Item | Position | Basis | Evidence |
+|---|---|---|---|
+| <item> | <position> | <analysis or verified> | `<path>` |
+
+## Not settled
+
+Open items, listed so nobody mistakes a recommendation for a decision.
+
+| Item | Status | Where |
+|---|---|---|
+| <item> | <recommended / pending evidence / owner decision pending> | `<path>` |

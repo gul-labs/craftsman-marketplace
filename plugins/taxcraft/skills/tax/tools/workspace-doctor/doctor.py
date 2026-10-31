@@ -26,19 +26,26 @@ Checks performed (see README.md for detail on each):
     with books; books/capital-accounts.md for partnerships (type taken from the
     labelled `Entity type:` field of entity.md, scanned only until that field is
     found; value never printed)
-  - In-place prose history in operative Markdown (supersession.md §8): update
+  - In-place prose history in operative Markdown (supersession.md §9): update
     headings, strikethrough, "kept for the audit trail", History/Change-log
     sections. Lines are matched against a fixed pattern list; the output is the
-    path and the rule name, never the matched text
-  - Decision-memo lineage (supersession.md §8): every decisions/*.md carries a
-    unique `Memo ID`, a `Supersedes` line and a `Superseded by` line, and
-    Supersedes / Superseded by pairs are reciprocal. Only the labelled header lines are read; IDs are never
-    printed
+    path and the rule name, never the matched text. The settled-positions
+    register is operative and is scanned even though it sits in decisions/
+  - Decision-memo lineage (supersession.md §9): every decisions/*.md other than
+    the settled-positions register carries a unique `Memo ID`, a `Supersedes`
+    line and a `Superseded by` line, and Supersedes / Superseded by pairs are
+    reciprocal. Only the labelled header lines are read; IDs are never printed
+  - Settled-positions register shape (supersession.md §8–§9): every
+    decisions/settled-positions.md has exactly one designated table with the
+    required headers, well-formed rows, valid fields, and Evidence paths that
+    resolve to files inside the workspace. Output is the path, a line number and
+    the rule name; cell values (IDs, amounts, paths) are never printed
   - poppler (pdftotext) presence
 
 Content read, in full: (1) entity.md until the `Entity type:` field, (2) operative
 Markdown line by line against the pattern list above, (3) decision-memo header
-lines. Nothing read is ever printed; findings are paths plus a rule name.
+lines, (4) settled-positions registers. Nothing read is ever printed; findings
+are paths plus a line number and a rule name.
 
 Privacy: any path with a segment containing "privileged" (case-insensitive)
 is excluded from every walk and never printed in output — see
@@ -47,6 +54,7 @@ check_privileged_excluded / _is_privileged below.
 from __future__ import annotations
 
 import argparse
+import datetime
 import os
 import re
 import shutil
@@ -464,7 +472,9 @@ PROSE_HISTORY_RULES: list[tuple[str, re.Pattern[str]]] = [
 
 def _iter_operative_markdown(root: Path):
     """Yield every *.md under the supersession roots that is operative prose:
-    not inside a record/evidence folder, not an append-only log, not privileged."""
+    not inside a record/evidence folder, not an append-only log, not privileged.
+    The settled-positions register is operative even though decisions/ is a
+    record folder, so it is yielded on its own."""
     for top in SUPERSESSION_ROOTS:
         base = root / top
         if not base.is_dir():
@@ -474,6 +484,9 @@ def _iter_operative_markdown(root: Path):
             rel_parts = set(dirpath.relative_to(root).parts)
             if rel_parts & PROSE_HISTORY_SKIP_DIRS:
                 continue
+            register = dirpath / "decisions" / SETTLED_REGISTER_NAME
+            if register.is_file():
+                yield register
             for fn in sorted(filenames):
                 if not fn.lower().endswith(".md") or fn in PROSE_HISTORY_SKIP_FILES:
                     continue
@@ -558,7 +571,7 @@ def _memo_header(path: Path) -> dict[str, str | None]:
 
 
 def check_decision_memo_lineage(root: Path) -> Finding:
-    """Every decisions/*.md carries a unique Memo ID and a Supersedes line; a
+    """Every decisions/*.md other than the settled-positions register carries a unique Memo ID and a Supersedes line; a
     memo named in another's Supersedes exists in the same folder and carries the
     reciprocal Superseded by, and vice versa (supersession.md §4–§5). Header
     lines only are read; IDs are never printed."""
@@ -575,7 +588,7 @@ def check_decision_memo_lineage(root: Path) -> Finding:
             memos = {
                 dirpath / fn: _memo_header(dirpath / fn)
                 for fn in sorted(filenames)
-                if fn.lower().endswith(".md")
+                if fn.lower().endswith(".md") and fn != SETTLED_REGISTER_NAME
             }
             folders.append((dirpath, memos))
             for p, h in memos.items():
@@ -607,6 +620,249 @@ def check_decision_memo_lineage(root: Path) -> Finding:
                     f.add(f"{_rel(root, p)}  (Superseded by names a memo not in this folder)")
                 elif memos[nxt]["supersedes"] != h["memo id"]:
                     f.add(f"{_rel(root, p)}  (Superseded by names a memo that does not supersede this one)")
+    return f
+
+
+# --- settled-positions register (supersession.md §8) -------------------------
+
+# The one non-memo file in decisions/: an operative register. Its schema is owned by
+# templates/settled-positions.md.template; these constants must match its header row
+# (evals/validate_settled_positions.py asserts they do).
+SETTLED_REGISTER_NAME = "settled-positions.md"
+SETTLED_HEADERS = ("ID", "Anchor", "Entry date", "Entry", "Position", "Settled", "Basis",
+                   "Reopen only if", "Evidence", "Lock")
+SETTLED_ANCHORS = ("ledger", "non-ledger")
+SETTLED_BASIS_RE = re.compile(r"\b(owner decision|owner fact|analysis|verified)\b", re.IGNORECASE)
+_SETTLED_EMPTY = {"", "—", "–", "-"}
+_SETTLED_ID_RE = re.compile(r"^[A-Z][A-Z0-9]*-S\d{3,}$")
+_SETTLED_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+# One posting: Account:Sub Amount CUR (Beancount-style account and commodity names).
+_SETTLED_LOCK_ITEM_RE = re.compile(
+    r"^[A-Z][A-Za-z0-9-]*(?::[A-Za-z0-9][A-Za-z0-9-]*)+\s+-?\d+(?:\.\d+)?\s+[A-Z][A-Z0-9'._-]{0,22}[A-Z0-9]$"
+)
+_SETTLED_EVIDENCE_RE = re.compile(r"^`[^`]+`(?:\s*;\s*`[^`]+`)*$")
+# A cell shaped like a settlement ID, well formed or not (`ALP-S00X` still counts).
+_SETTLED_ID_LIKE_RE = re.compile(r"^`?[A-Z][A-Z0-9]*-S[A-Za-z0-9]+`?$")
+_SEPARATOR_CELL_RE = re.compile(r"^:?-{3,}:?$")
+
+
+def _settled_cells(line: str) -> list[str] | None:
+    """Split a Markdown table line into stripped cells; None if it is not a
+    `| … |` line or contains an escaped pipe (which the register forbids)."""
+    s = line.strip()
+    if not (s.startswith("|") and s.endswith("|") and len(s) > 1) or "\\|" in s:
+        return None
+    return [c.strip() for c in s[1:-1].split("|")]
+
+
+def _fenced_mask(lines: list[str]) -> list[bool]:
+    """True for every line inside (or opening/closing) a fenced code block, with
+    the same CommonMark rule as the prose-history scanner: a fence closes only on
+    the same character with a run at least as long and nothing after it."""
+    mask: list[bool] = []
+    fence: tuple[str, int] | None = None
+    for line in lines:
+        m = _FENCE_RE.match(line.lstrip())
+        if m:
+            ch, run = m.group(1)[0], len(m.group(1))
+            if fence is None:
+                fence = (ch, run)
+                mask.append(True)
+                continue
+            if ch == fence[0] and run >= fence[1] and not m.group(2).strip():
+                fence = None
+                mask.append(True)
+                continue
+        mask.append(fence is not None)
+    return mask
+
+
+def _settled_date_ok(value: str) -> bool:
+    if not _SETTLED_ISO_DATE_RE.match(value):
+        return False
+    try:
+        datetime.date.fromisoformat(value)
+        return True
+    except ValueError:
+        return False
+
+
+def _settled_lock_ok(value: str) -> bool:
+    # Every ;-separated component must be a posting: `a;;b` or a trailing `;` is malformed.
+    items = [x.strip() for x in value.strip("`").split(";")]
+    return all(_SETTLED_LOCK_ITEM_RE.match(x) for x in items)
+
+
+def _settled_evidence_problems(cell: str, root: Path) -> list[str]:
+    """Rule names for a bad Evidence cell. Paths are resolved (symlinks
+    included) before the containment test; they are never printed."""
+    if not _SETTLED_EVIDENCE_RE.match(cell):
+        return ["Evidence is not a ;-separated list of backticked paths"]
+    out: list[str] = []
+    real_root = root.resolve()
+    for rel in re.findall(r"`([^`]+)`", cell):
+        if rel.startswith(("/", "~")) or re.match(r"^[A-Za-z]:[\\/]", rel):
+            out.append("Evidence path is not workspace-relative")
+            continue
+        try:
+            target = (root / rel).resolve()
+            if real_root != target and real_root not in target.parents:
+                out.append("Evidence path escapes the workspace")
+            elif not target.is_file():
+                out.append("Evidence path is missing or not a file")
+        except (OSError, ValueError, RuntimeError):
+            # NUL bytes, symlink loops, permission errors: report a fixed rule, never
+            # the traceback, which would carry the path.
+            out.append("Evidence path cannot be resolved")
+    return out
+
+
+def _settled_ancillary_rows(lines: list[str], fenced: list[bool], designated: int) -> set[int]:
+    """Line indexes belonging to tables other than the designated one: each
+    header, its separator, and every following row of the header's width."""
+    out: set[int] = set()
+    for i in range(len(lines) - 1):
+        if i == designated or fenced[i] or fenced[i + 1]:
+            continue
+        header = _settled_cells(lines[i])
+        sep = _settled_cells(lines[i + 1])
+        if header is None or sep is None or len(sep) != len(header) \
+                or not all(_SEPARATOR_CELL_RE.match(c) for c in sep):
+            continue
+        out.update((i, i + 1))
+        k = i + 2
+        while k < len(lines) and not fenced[k] and lines[k].strip().startswith("|"):
+            cells = _settled_cells(lines[k])
+            if cells is not None and len(cells) == len(header):
+                out.add(k)
+            k += 1
+    return out
+
+
+def _settled_orphan_row(line: str, width: int, id_col: int, anchor_col: int, *, strict: bool = False) -> bool:
+    """Does `line` look like a register row? Loose (outside any table): led by an
+    ID-shaped cell, or the designated width with an Anchor value or an ID-shaped
+    cell in its column. Strict (inside an ancillary table): the designated width
+    with both."""
+    stripped = line.strip()
+    if stripped.startswith("|"):
+        stripped = stripped[1:]
+    if stripped.endswith("|"):
+        stripped = stripped[:-1]
+    cells = [c.strip() for c in stripped.split("|")]
+    if len(cells) == width:
+        has_anchor = cells[anchor_col].strip("`").lower() in SETTLED_ANCHORS
+        has_id = bool(_SETTLED_ID_LIKE_RE.match(cells[id_col]))
+        if strict:
+            return has_anchor and has_id
+        if has_anchor or has_id:
+            return True
+    return not strict and bool(_SETTLED_ID_LIKE_RE.match(cells[0]))
+
+
+def settled_register_problems(text: str, root: Path) -> list[tuple[int, str]]:
+    """Validate a settled-positions register. Returns [(line, rule)], line 0 for
+    whole-file problems. Never returns cell content."""
+    lines = text.split("\n")
+    fenced = _fenced_mask(lines)
+    tables: list[tuple[int, list[str], int]] = []
+    for i, line in enumerate(lines):
+        if fenced[i] or i + 1 >= len(lines) or fenced[i + 1]:
+            continue
+        cells = _settled_cells(line)
+        if cells is None:
+            continue
+        sep = _settled_cells(lines[i + 1])
+        if sep is None or not all(_SEPARATOR_CELL_RE.match(c) for c in sep):
+            continue
+        if set(SETTLED_HEADERS) <= set(cells):
+            tables.append((i, cells, len(sep)))
+    if len(tables) != 1:
+        return [(0, f"expected exactly one table with every required header, found {len(tables)}")]
+    hi, headers, sep_width = tables[0]
+    if len(set(headers)) != len(headers):
+        return [(hi + 1, "duplicate header")]
+    if sep_width != len(headers):
+        return [(hi + 2, "separator width differs from the header")]
+    col = {h: headers.index(h) for h in SETTLED_HEADERS}
+    problems: list[tuple[int, str]] = []
+    ids: dict[str, int] = {}
+    j = hi + 2
+    while j < len(lines) and lines[j].strip().startswith("|"):
+        ln = j + 1
+        cells = _settled_cells(lines[j])
+        j += 1
+        if cells is None or len(cells) != len(headers):
+            problems.append((ln, "malformed row (cell count, or a pipe inside a cell)"))
+            continue
+        get = {h: cells[col[h]] for h in SETTLED_HEADERS}
+        sid = get["ID"].strip("`")
+        anchor = get["Anchor"].strip("`").lower()
+        if not _SETTLED_ID_RE.match(sid):
+            problems.append((ln, "ID is not <PREFIX>-S<NNN>"))
+        elif sid in ids:
+            problems.append((ln, "duplicate ID"))
+        else:
+            ids[sid] = ln
+        if anchor not in SETTLED_ANCHORS:
+            problems.append((ln, "Anchor is not ledger or non-ledger"))
+        for h in ("Entry", "Position", "Settled", "Basis", "Reopen only if"):
+            if get[h] in _SETTLED_EMPTY:
+                problems.append((ln, f"{h} is empty"))
+        if get["Basis"] not in _SETTLED_EMPTY and not SETTLED_BASIS_RE.search(get["Basis"]):
+            problems.append((ln, "Basis names none of owner decision / owner fact / analysis / verified"))
+        if anchor == "ledger":
+            if not _settled_date_ok(get["Entry date"]):
+                problems.append((ln, "ledger row without a valid YYYY-MM-DD Entry date"))
+            if not _settled_lock_ok(get["Lock"]):
+                problems.append((ln, "ledger row with an empty or malformed Lock"))
+        elif anchor == "non-ledger":
+            if get["Entry date"] not in _SETTLED_EMPTY or get["Lock"] not in _SETTLED_EMPTY:
+                problems.append((ln, "non-ledger row carries an Entry date or Lock"))
+        for rule in _settled_evidence_problems(get["Evidence"], root):
+            problems.append((ln, rule))
+    # The table ends at the first non-row line. A settlement row anywhere else in the
+    # file (cut off by a blank line, missing its leading or trailing pipe, above the
+    # table, or under another heading) would fall out of the inventory: report it.
+    # A row is recognised by the designated table's own schema, so reordered columns
+    # are covered: the designated width, with an Anchor value in the Anchor column or
+    # an ID-shaped cell in the ID column; or any line led by an ID-shaped cell.
+    # Rows of an ancillary table (its own header and a separator of the same width,
+    # and that width) may mention an ID or say "ledger" incidentally, so only a full
+    # settlement signature (ID-shaped cell in the ID column AND an Anchor value in
+    # the Anchor column, at the designated width) is reported there. A row that does
+    # not fit its table's width is examined like any other line.
+    ancillary = _settled_ancillary_rows(lines, fenced, hi)
+    for k, line in enumerate(lines):
+        if hi <= k < j or fenced[k] or "|" not in line:
+            continue
+        strict = k in ancillary
+        if _settled_orphan_row(line, len(headers), col["ID"], col["Anchor"], strict=strict):
+            problems.append((k + 1, "row-like line outside the register table"))
+    return problems
+
+
+def check_settled_positions_registers(root: Path) -> Finding:
+    """Every decisions/settled-positions.md under the supersession roots is a
+    well-formed register (supersession.md §8). Report-only: path, line number
+    and rule name; no cell value is ever printed."""
+    f = Finding("Settled-positions register (supersession.md)")
+    for top in SUPERSESSION_ROOTS:
+        base = root / top
+        if not base.is_dir():
+            continue
+        for dirpath, _dirnames, filenames in _iter_dirs(base):
+            if dirpath.name != "decisions" or SETTLED_REGISTER_NAME not in filenames:
+                continue
+            reg = dirpath / SETTLED_REGISTER_NAME
+            try:
+                text = reg.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                f.add(f"{_rel(root, reg)}  (unreadable)")
+                continue
+            for ln, rule in settled_register_problems(text, root):
+                where = f"{_rel(root, reg)}:{ln}" if ln else _rel(root, reg)
+                f.add(f"{where}  ({rule})")
     return f
 
 
@@ -647,6 +903,7 @@ def run(root: Path) -> int:
         check_entity_trackers(root),
         check_in_place_prose_history(root),
         check_decision_memo_lineage(root),
+        check_settled_positions_registers(root),
     ]
 
     total_issues = 0
