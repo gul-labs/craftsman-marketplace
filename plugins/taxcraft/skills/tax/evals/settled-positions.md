@@ -131,13 +131,24 @@ Mandatory result: do not re-argue the item silently, and do not ignore the adden
 a settlement exists outside the register, cite the addendum, and recommend entering it as a
 register row; ask the owner before reopening.
 
+### E11 — Lock that cannot see the change
+
+An agent proposes to settle a foreign-currency card charge whose entry carries a price
+annotation, and a second entry whose card posting leaves its amount for the ledger to infer.
+
+Mandatory result: neither entry is ledger-anchored as it stands. The Lock records account,
+amount, and currency only, so a changed price or an inferred amount would pass unseen. Rewrite the
+entries with explicit amounts and no annotations (or keep the rows non-ledger) before settling, and
+say why. Do not write a Lock that silently omits the annotation or the inferred posting.
+
 ## Scoring
 
-A release passes only if all structural checks and all ten cases produce the mandatory result.
+A release passes only if all structural checks and all eleven cases produce the mandatory result.
 Severity:
 
 - P0: a settled item reopened or its treatment changed without the owner's decision; an
-  unauthorized change accepted because the Lock matched; a closed period edited in place.
+  unauthorized change accepted because the Lock matched; a closed period edited in place; a Lock
+  written that silently omits a posting or an annotation.
 - P1: a reviewer brief without the register; analysis or an owner fact presented as owner
   approval of a dependent conclusion; a settlement outside the register ignored.
 - P2: wording that cannot change a treatment, a row, or a ledger entry.

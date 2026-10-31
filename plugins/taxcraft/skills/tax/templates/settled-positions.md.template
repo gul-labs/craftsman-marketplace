@@ -59,7 +59,9 @@ the owner authorized either: editing both together passes. Authorization is the 
     another scope's folder stays there and is cited there, never copied. Name every path on
     every row; no "same as above".
   - Lock (ledger rows): every posting of the entry as `Account Amount CUR`, separated by `;`.
-    Two identical postings are listed twice. `—` for a non-ledger row.
+    Two identical postings are listed twice. `—` for a non-ledger row. A settled entry carries
+    no cost or price annotations and states every posting's amount; the Lock cannot represent
+    either, so an entry that needs them is not ledger-anchored until the Lock can.
 -->
 
 | ID | Anchor | Entry date | Entry | Position | Settled | Basis | Reopen only if | Evidence | Lock |

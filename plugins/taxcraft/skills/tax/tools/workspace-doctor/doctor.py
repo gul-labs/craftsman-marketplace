@@ -641,7 +641,9 @@ _SETTLED_LOCK_ITEM_RE = re.compile(
     r"^[A-Z][A-Za-z0-9-]*(?::[A-Za-z0-9][A-Za-z0-9-]*)+\s+-?\d+(?:\.\d+)?\s+[A-Z][A-Z0-9'._-]{0,22}[A-Z0-9]$"
 )
 _SETTLED_EVIDENCE_RE = re.compile(r"^`[^`]+`(?:\s*;\s*`[^`]+`)*$")
-_SETTLED_ROWISH_RE = re.compile(r"^\s*\||`[A-Z][A-Z0-9]*-S\d{3,}`")
+# A line whose first cell is a settlement ID, with or without its leading pipe or
+# backticks: a register row, wherever it sits.
+_SETTLED_ROW_LIKE_RE = re.compile(r"^\s*\|?\s*`?[A-Z][A-Z0-9]*-S\d{3,}`?\s*\|")
 _SEPARATOR_CELL_RE = re.compile(r"^:?-{3,}:?$")
 
 
@@ -652,6 +654,28 @@ def _settled_cells(line: str) -> list[str] | None:
     if not (s.startswith("|") and s.endswith("|") and len(s) > 1) or "\\|" in s:
         return None
     return [c.strip() for c in s[1:-1].split("|")]
+
+
+def _fenced_mask(lines: list[str]) -> list[bool]:
+    """True for every line inside (or opening/closing) a fenced code block, with
+    the same CommonMark rule as the prose-history scanner: a fence closes only on
+    the same character with a run at least as long and nothing after it."""
+    mask: list[bool] = []
+    fence: tuple[str, int] | None = None
+    for line in lines:
+        m = _FENCE_RE.match(line.lstrip())
+        if m:
+            ch, run = m.group(1)[0], len(m.group(1))
+            if fence is None:
+                fence = (ch, run)
+                mask.append(True)
+                continue
+            if ch == fence[0] and run >= fence[1] and not m.group(2).strip():
+                fence = None
+                mask.append(True)
+                continue
+        mask.append(fence is not None)
+    return mask
 
 
 def _settled_date_ok(value: str) -> bool:
@@ -665,8 +689,9 @@ def _settled_date_ok(value: str) -> bool:
 
 
 def _settled_lock_ok(value: str) -> bool:
-    items = [x.strip() for x in value.strip("`").split(";") if x.strip()]
-    return bool(items) and all(_SETTLED_LOCK_ITEM_RE.match(x) for x in items)
+    # Every ;-separated component must be a posting: `a;;b` or a trailing `;` is malformed.
+    items = [x.strip() for x in value.strip("`").split(";")]
+    return all(_SETTLED_LOCK_ITEM_RE.match(x) for x in items)
 
 
 def _settled_evidence_problems(cell: str, root: Path) -> list[str]:
@@ -680,11 +705,16 @@ def _settled_evidence_problems(cell: str, root: Path) -> list[str]:
         if rel.startswith(("/", "~")) or re.match(r"^[A-Za-z]:[\\/]", rel):
             out.append("Evidence path is not workspace-relative")
             continue
-        target = (root / rel).resolve()
-        if real_root != target and real_root not in target.parents:
-            out.append("Evidence path escapes the workspace")
-        elif not target.is_file():
-            out.append("Evidence path is missing or not a file")
+        try:
+            target = (root / rel).resolve()
+            if real_root != target and real_root not in target.parents:
+                out.append("Evidence path escapes the workspace")
+            elif not target.is_file():
+                out.append("Evidence path is missing or not a file")
+        except (OSError, ValueError, RuntimeError):
+            # NUL bytes, symlink loops, permission errors: report a fixed rule, never
+            # the traceback, which would carry the path.
+            out.append("Evidence path cannot be resolved")
     return out
 
 
@@ -692,13 +722,10 @@ def settled_register_problems(text: str, root: Path) -> list[tuple[int, str]]:
     """Validate a settled-positions register. Returns [(line, rule)], line 0 for
     whole-file problems. Never returns cell content."""
     lines = text.split("\n")
+    fenced = _fenced_mask(lines)
     tables: list[tuple[int, list[str], int]] = []
-    fence = False
     for i, line in enumerate(lines):
-        if _FENCE_RE.match(line.lstrip()):
-            fence = not fence
-            continue
-        if fence or i + 1 >= len(lines):
+        if fenced[i] or i + 1 >= len(lines) or fenced[i + 1]:
             continue
         cells = _settled_cells(line)
         if cells is None:
@@ -752,14 +779,15 @@ def settled_register_problems(text: str, root: Path) -> list[tuple[int, str]]:
                 problems.append((ln, "non-ledger row carries an Entry date or Lock"))
         for rule in _settled_evidence_problems(get["Evidence"], root):
             problems.append((ln, rule))
-    # The table ends at the first non-row line. A row-like line after it, before the
-    # next heading, was cut off by a blank line or a lost leading pipe: report it
-    # rather than let it fall out of the inventory.
-    k = j
-    while k < len(lines) and not lines[k].lstrip().startswith("#"):
-        if _SETTLED_ROWISH_RE.search(lines[k]):
+    # The table ends at the first non-row line. A settlement row anywhere else in the
+    # file (cut off by a blank line, missing its leading pipe, above the table, or
+    # under another heading) would fall out of the inventory: report it. Ancillary
+    # tables are fine; their first cell is an item, not a settlement ID.
+    for k, line in enumerate(lines):
+        if hi <= k < j or fenced[k]:
+            continue
+        if _SETTLED_ROW_LIKE_RE.match(line):
             problems.append((k + 1, "row-like line outside the register table"))
-        k += 1
     return problems
 
 

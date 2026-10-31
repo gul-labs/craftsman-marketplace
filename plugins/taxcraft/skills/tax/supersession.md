@@ -226,6 +226,11 @@ Only on the owner's decision. Order of operations, extending §5:
   as a multiset (two identical postings are two items). It is a deliberate control snapshot of
   the actual postings, and a deliberate exception to the anti-duplication rule: it exists to be
   compared with the ledger, so it has to repeat it.
+- The snapshot is account, amount, and currency, nothing else. Until a workspace's snapshot
+  represents them, a settled entry may not carry cost or price annotations (a changed valuation
+  would pass unseen), and every posting must state its amount (an amount the ledger infers is not
+  in the snapshot). An enforcement check rejects such an entry; it never silently skips a posting
+  it cannot represent.
 - **A matching Lock detects drift; it does not prove authorization.** Editing an entry and its
   Lock together, deleting the row and the ID together, or switching the check off all pass it.
   Authorization lives in the decision memo and in review: a change that touches a settled entry
@@ -264,7 +269,7 @@ text or IDs; each prints the path (and, for the register, the line number) and t
   no duplicate headers, rows of the right width with no pipes inside cells, valid and unique IDs,
   an explicit Anchor, a Basis using the vocabulary, a well-formed Lock and entry date on ledger
   rows and neither on non-ledger rows, and Evidence that names at least one existing file inside
-  the workspace. A row-like line stranded outside the table is reported, never dropped.
+  the workspace. A settlement row anywhere outside the table is reported, never dropped.
 
 A clean doctor run is not proof the rule was followed. It proves the patterns agents have
 actually written are absent and that the register is well formed; it cannot tell whether the

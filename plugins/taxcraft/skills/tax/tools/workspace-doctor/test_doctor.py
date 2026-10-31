@@ -523,6 +523,44 @@ class SettledPositionsRegisterCheck(unittest.TestCase):
         text = "# S\n\n```\n" + REG_HEADER + LEDGER_ROW + "```\n"
         self.assertIn("found 0", self.rules(text)[0])
 
+    def test_lock_with_empty_component_or_cost_annotation(self):
+        for lock in ("Expenses:Office 100.00 USD;; Liabilities:Card -100.00 USD",
+                     "Expenses:Office 100.00 USD; Liabilities:Card -100.00 USD;",
+                     "Assets:Brokerage 1 SHARE {100.00 USD}; Liabilities:Card -100.00 USD",
+                     "Assets:Cash 100.00 EUR @ 1.10 USD; Liabilities:Card -110.00 USD"):
+            row = LEDGER_ROW.replace("Expenses:Office 100.00 USD; Liabilities:Card -100.00 USD", lock)
+            self.assertIn("ledger row with an empty or malformed Lock", self.rules(_register(row)), lock)
+
+    def test_unresolvable_evidence_is_a_rule_not_a_crash(self):
+        loop = self.root / "entities/alpha-llc/loop.md"
+        loop.symlink_to(loop)
+        for path in ("entities/alpha-llc/loop.md", "entities/alpha-llc/bad\x00name.md"):
+            row = LEDGER_ROW.replace(f"`{EV}`", f"`{path}`")
+            rules = self.rules(_register(row))
+            self.assertTrue(any(r.startswith("Evidence path") for r in rules), (path, rules))
+            for r in rules:
+                self.assertNotIn("loop", r)
+                self.assertNotIn("bad", r)
+
+    def test_table_inside_longer_fence_is_not_designated(self):
+        text = "# S\n\n````\n```\n" + REG_HEADER + LEDGER_ROW + "```\n````\n"
+        self.assertIn("found 0", self.rules(text)[0])
+
+    def test_row_with_lost_pipe_and_no_backticks_is_reported(self):
+        stranded = NONLEDGER_ROW.lstrip("| ").replace("`ALP-S002`", "ALP-S002")
+        self.assertIn("row-like line outside the register table", self.rules(_register(LEDGER_ROW + "\n" + stranded)))
+
+    def test_row_above_the_table_or_under_another_heading_is_reported(self):
+        above = _register(LEDGER_ROW, before=NONLEDGER_ROW + "\n")
+        below = _register(LEDGER_ROW, after="\n## Other\n\n" + NONLEDGER_ROW)
+        for text in (above, below):
+            self.assertIn("row-like line outside the register table", self.rules(text))
+
+    def test_ancillary_tables_and_prose_mentions_are_not_stranded_rows(self):
+        after = ("\n## Not settled\n\n| Item | Status | Where |\n|---|---|---|\n"
+                 "| Cruise charge | recommended; see ALP-S001 | `x` |\n\nALP-S001 was settled by the owner.\n")
+        self.assertEqual(self.rules(_register(after=after)), [])
+
     def test_findings_name_path_and_line_never_content(self):
         _write(self.root, REG, _register(LEDGER_ROW.replace("Expenses:Office 100.00 USD", "SECRETACCT 7")))
         hits = self.paths()

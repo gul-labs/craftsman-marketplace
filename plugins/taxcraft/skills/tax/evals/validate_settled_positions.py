@@ -98,6 +98,8 @@ def check_supersession() -> None:
         "Post a correcting entry in the open period",
         "A matching Lock detects drift; it does not prove authorization",
         "multiset",
+        "may not carry cost or price annotations",
+        "never silently skips a posting",
     ], "supersession.md §8")
     s1 = section(text, "1. Operative files and records")
     require(s1, ["`decisions/settled-positions.md`", "other than `settled-positions.md`"],
@@ -185,6 +187,7 @@ REQUIRED_CASES = {
     "E8": "matching lock, no authorization",
     "E9": "not-settled item mistaken for settled",
     "E10": "settlement recorded only outside the register",
+    "E11": "lock that cannot see the change",
 }
 
 
