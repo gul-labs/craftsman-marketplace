@@ -3,8 +3,9 @@
 How a changed answer is recorded in prose. `naming.md` owns the memo filename and ID; `layout.md`
 owns where `decisions/` sits in the tree; `close-estimate.md` and `parsing.md` own supersession
 for computed runs and parsed documents respectively. This file owns everything else: what an
-operative file may contain, when a change needs a memo, what is kept, what is pruned, and the
-order of operations. Do not duplicate these rules elsewhere.
+operative file may contain, when a change needs a memo, what is kept, what is pruned, the
+order of operations, and the settled-positions protocol (§8). Do not duplicate these rules
+elsewhere.
 
 ## Why this file exists
 
@@ -24,8 +25,8 @@ to learn *what is true now*, *what was concluded on a date*, or *what happened, 
 
 | Kind | Test | Examples | Rule |
 |---|---|---|---|
-| **Operative** | Read for the current state of a fact, position, or figure | `entity.md`, `profile.md`, `tax-summary.md`, `quarterly/Q<n>/estimate.md`, registers of current state (`carryforwards.json`, the positions register), `property.md`, `position.md`, `account.md`, `review.md`, `return-package.md`, annual workpapers | States one current answer. Rewritten whole when the answer changes. |
-| **Record** | Read for what was concluded, filed, or received as of a date | `decisions/*.md`, `.computed/<run-id>-*`, `filed/`, `source/`, `.parsed/`, `history.md`, `notes/` correspondence, `individual/records/**` | Immutable once written. A later record supersedes; it never edits. |
+| **Operative** | Read for the current state of a fact, position, or figure | `entity.md`, `profile.md`, `tax-summary.md`, `quarterly/Q<n>/estimate.md`, registers of current state (`carryforwards.json`, the positions register, `decisions/settled-positions.md`), `property.md`, `position.md`, `account.md`, `review.md`, `return-package.md`, annual workpapers | States one current answer. Rewritten whole when the answer changes. |
+| **Record** | Read for what was concluded, filed, or received as of a date | `decisions/*.md` other than `settled-positions.md`, `.computed/<run-id>-*`, `filed/`, `source/`, `.parsed/`, `history.md`, `notes/` correspondence, `individual/records/**` | Immutable once written. A later record supersedes; it never edits. |
 | **Tracker or ledger** | Read for a sequence of events or items, each with a status | `open-questions.md`, `pending-docs.md`, the open-items tracker, `cross-entity-followup-log.md`, `books/journal-entries.md` | Rows are events. They are appended, closed, or withdrawn per the file's own template, never deleted; a wrong row is corrected by a correcting row. |
 
 The state-versus-event test decides the kind. A row that describes *what is true now* (a
@@ -70,7 +71,8 @@ A memo records a changed conclusion, not a changed keystroke.
   items; they span tax years and sit at the scope root, never under `FY<YYYY>/`. Evidence that a
   decision was executed (a filed §83(b), a grouping disclosure) stays in its evidence home, for
   example `individual/records/elections/`. A memo explains a decision; it does not replace the
-  evidence for it.
+  evidence for it. The one file in `decisions/` that is not a memo is the settled-positions
+  register (§8): it is operative, carries no memo header, and is rewritten as settlements change.
 - **Filename and ID:** `naming.md` "Decision memos". Human-readable, date-first, one memo per
   decision.
 - **Header:** labelled bold lines, in the workspace's existing style. `Memo ID`, `Issued`,
@@ -134,20 +136,136 @@ current register with stale rows is an operative file carrying prior reasoning. 
 records that something was considered and rejected, the row holds the one-line disposition and
 the memo ID, not the argument.
 
-## 8. What the doctor flags
+## 8. Settled positions
 
-`tools/workspace-doctor/` runs two report-only checks for this file. Neither prints matched
-text; both print the path and the rule name.
+An owner settles an item, and a later agent or reviewer, meeting the item cold in a workpaper or a
+ledger, argues it again: the settlement was recorded somewhere nobody was obliged to read. This
+section makes one file per scope the place every reader checks first. `SKILL.md` says *when* it
+must be read; this section owns everything else about it.
+
+### 8.1 The register
+
+- **Where:** `<scope-root>/decisions/settled-positions.md`, or
+  `workspace-profile/decisions/settled-positions.md` for cross-entity items. Created from
+  `templates/settled-positions.md.template` the first time the owner settles an item in that
+  scope. One register per scope; never per year.
+- **Kind:** an operative register (§1). It is the current-state index of what is settled, rewritten
+  in place as settlements change, with no superseded rows, strikethrough, or history (§2, §7). It
+  is the one file in `decisions/` that is not a memo.
+- **Division of labor:** the register says *what* is settled, on what basis, and what would
+  reopen it. The decision memo, or the dated evidence the row's `Evidence` cites, says *why* and
+  who decided. Memos are immutable records (§4); the register is not.
+- **One designated table** holds the settled items. Its schema (columns, value formats, the Basis
+  vocabulary, the no-pipes-in-cells rule) lives in the template and nowhere else. Other sections
+  are allowed and are not settled: items decided but with documentation still owed, documented
+  analysis or verified facts that are not owner decisions, and items expressly not settled. They
+  are listed so that nobody mistakes a recommendation for a decision.
+- **What a row holds:** `Position` is a short disposition ("education expense; deductible in the
+  year paid; see decision"), not facts, calculations, legal argument, or repeated amounts. `Entry`
+  is a human-readable locator that does not repeat the date or the Lock's amounts.
+
+### 8.2 What "settled" means, and what it does not
+
+- `Basis` records provenance: `owner decision` (the owner, or the board, manager, or officer with
+  authority, chose the treatment), `owner fact` (the owner supplied a fact and the treatment
+  follows from it), `analysis` (our reasoning, subject to professional review), `verified`
+  (established from a document). A row may combine them, and must say which part rests on which.
+- **Only `owner decision` settles a treatment on its own.** `analysis` and `verified` are
+  provenance categories, not owner approval.
+- **An owner fact settles the fact, not every legal conclusion that depends on it.** "The owner
+  says the payment was a gift" settles that a gift was made; whether the recipient qualifies, or
+  the deduction is allowed, is settled only if the row says the owner decided it. An unverified
+  dependent conclusion stays a hold or a risk, named in the row.
+- A row in the designated table is settled. An item anywhere else, in the register or elsewhere in
+  the workspace, is not, however confident the workpaper sounds. A settlement found only in a
+  workpaper, addendum, or tracker is reported to the owner for entry in the register; it is neither
+  ignored nor silently re-argued.
+
+### 8.3 Reading, challenging, and reopening
+
+1. **Report, do not reopen.** A rule, authority, or doubt that merely bears on a settled item is a
+   risk, not a reopening. Report it to the owner against the settlement ID, with the authority and
+   what would follow if it applied. The row, the treatment, and any ledger entry stay as they are.
+   Reviewers stay free to report contradictions and risks; they do not mark the item open.
+2. **Reopen only on the trigger.** A settled item is reopened only when its `Reopen only if`
+   condition is met by new facts about that item. Cite the settlement ID, identify the specific
+   new evidence that meets the condition, and ask the owner.
+3. **Only the owner reopens.** Until the owner decides, the treatment is unchanged. A met trigger
+   is a question for the owner, not a licence to change the books or the return.
+4. **Every reviewer brief includes the register** (the file, or the rows in scope plus its path)
+   and says that settled rows are reported as risks, not reopened.
+
+### 8.4 Changing a settled answer
+
+Only on the owner's decision. Order of operations, extending §5:
+
+1. Write a new decision memo in the same `decisions/` folder. `Supersedes` names the predecessor
+   memo, or `none` if the settlement lived only in other dated evidence (which the new memo cites
+   in its facts). Never edit an issued memo body.
+2. Stamp the predecessor's `Superseded by`.
+3. Rewrite the register row so it states the new answer and cites the new memo in `Evidence`. If
+   the owner un-settles the item instead, remove the row and list it under the not-settled
+   section.
+4. For a ledger-anchored row:
+   - **Open period:** change the entry's postings and the row's `Lock` together, in one change.
+   - **Closed period:** leave the historical entry and its `Lock` untouched. Post a correcting
+     entry in the open period, give it its own ledger row with its own `Lock`, and cite the new
+     memo from both rows. Owner approval alone does not lift the books' closed-period rule.
+   - **Un-settled:** remove the settlement ID from the entry in the same change that removes the
+     row.
+
+### 8.5 Ledger anchoring and what the Lock proves
+
+- A row is `ledger` (tied to one ledger transaction) or `non-ledger` (a filing position, an
+  election, anything without a single entry). The Anchor is explicit: an empty `Lock` never decides
+  whether a row is enforced. A ledger row needs an entry date and a `Lock`; a non-ledger row has
+  neither.
+- The transaction carries only the settlement ID as metadata, plus at most a comment pointing at
+  the register. It restates nothing.
+- The `Lock` is the expected posting snapshot: every posting as account, amount, and currency,
+  as a multiset (two identical postings are two items). It is a deliberate control snapshot of
+  the actual postings, and a deliberate exception to the anti-duplication rule: it exists to be
+  compared with the ledger, so it has to repeat it.
+- **A matching Lock detects drift; it does not prove authorization.** Editing an entry and its
+  Lock together, deleting the row and the ID together, or switching the check off all pass it.
+  Authorization lives in the decision memo and in review: a change that touches a settled entry
+  and its Lock together is not authorized unless a new memo (§8.4) authorizes it.
+- Narration, links, payee text, and other metadata are outside the Lock. The ID binds a label to
+  an entry, not to a bank event: two entries with the same date and postings could swap IDs
+  undetected. Where bank-event identity matters, bind the bank's own stable transaction ID
+  explicitly.
+- The skill does not ship a ledger enforcement plugin. A workspace with ledger tooling may add one
+  that fails its ledger check when an entry and its row disagree; the workspace doctor (§9)
+  validates the register's shape and evidence paths only.
+
+### 8.6 Relationship to other registers
+
+The tax elections and positions register records return positions and the evidence status of the
+filing that took them. The settled register records which items the owner has closed to further
+argument. An item may appear in both: each file owns its own column, cites the same memo, and
+restates neither the other's status nor the reasoning.
+
+## 9. What the doctor flags
+
+`tools/workspace-doctor/` runs three report-only checks for this file. None prints matched
+text or IDs; each prints the path (and, for the register, the line number) and the rule name.
 
 - **In-place prose history** in operative Markdown: update headings (`§0a`, `Update (date)`,
   `Updated`, `Revised`), strikethrough, "kept for the audit trail", and History / Change log /
-  Prior analysis / Superseded sections. Fenced code is ignored. `decisions/`, `notes/`, records
+  Prior analysis / Superseded sections. Fenced code is ignored. `decisions/` (except the
+  settled-positions register, which is operative and scanned), `notes/`, records
   folders, and the trackers and logs named in §1 (`history.md`, `open-questions.md`,
   `pending-docs.md`, `cross-entity-followup-log.md`, `open-items-tracker.md`) are out of scope.
 - **Decision-memo lineage:** every memo carries a unique `Memo ID`, a `Supersedes` line, and a
   `Superseded by` line (empty until filled); a
   memo named by another's `Supersedes` exists in the same `decisions/` folder and carries the
-  reciprocal `Superseded by`.
+  reciprocal `Superseded by`. The settled-positions register is not a memo and is skipped.
+- **Settled-positions register shape:** exactly one designated table with every required header,
+  no duplicate headers, rows of the right width with no pipes inside cells, valid and unique IDs,
+  an explicit Anchor, a Basis using the vocabulary, a well-formed Lock and entry date on ledger
+  rows and neither on non-ledger rows, and Evidence that names at least one existing file inside
+  the workspace. A row-like line stranded outside the table is reported, never dropped.
 
-A clean doctor run is not proof the rule was followed. It proves the four patterns agents have
-actually written are absent.
+A clean doctor run is not proof the rule was followed. It proves the patterns agents have
+actually written are absent and that the register is well formed; it cannot tell whether the
+owner authorized what the register says.

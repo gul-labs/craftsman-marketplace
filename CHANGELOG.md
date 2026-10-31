@@ -24,6 +24,35 @@ not a synonym for "public."
 
 ## [Unreleased]
 
+### Added
+
+- `taxcraft` settled-positions rule. An owner-settled position was reopened by a later agent
+  because the settlement lived only in a workpaper addendum nobody was obliged to read. Each scope
+  now keeps one operative register, `<scope-root>/decisions/settled-positions.md`, as the
+  canonical owner of settlement state:
+  - `SKILL.md`: router step and a STRICT rule. Read the register before proposing a changed
+    treatment, calling an item open, or issuing any reviewer brief; reopen only when the row's
+    `Reopen only if` condition is met by new facts about that item, and only with the owner's
+    decision; a rule that merely bears on a settled item is reported as a risk; every reviewer
+    brief includes the register; an owner fact does not settle dependent legal conclusions, and
+    `analysis` / `verified` are provenance, not owner approval.
+  - `supersession.md` §8 (new; the doctor section moves to §9): register vs. immutable memos,
+    Basis provenance, reopen protocol, change order of operations with open-period (entry and
+    Lock together) and closed-period (correcting entry) branches, explicit ledger anchoring, and
+    the statement that a matching Lock detects drift but does not prove authorization.
+  - `layout.md`, `naming.md`: canonical location and `<PREFIX>-S<NNN>` IDs; marked operative.
+  - `templates/settled-positions.md.template`: the designated table's schema and rules, plus
+    sections for decided-but-undocumented, documented analysis, and not-settled items.
+  - `tools/workspace-doctor`: the register is no longer treated as a decision memo by the lineage
+    check, is scanned as operative prose, and gets a new report-only shape check (one designated
+    table, headers, row width, no pipes in cells, IDs, Anchor, Basis vocabulary, ledger Lock and
+    entry date, Evidence files inside the workspace, stranded rows). 34 new fixture tests.
+  - `evals/settled-positions.md` (ten synthetic behavioral cases: settled, partially settled,
+    triggered, untriggered, owner-approved supersession in open and closed periods, reviewer
+    briefs, matching Lock without authorization) and `evals/validate_settled_positions.py`
+    (structural contracts, template/doctor header agreement, filled template passes the doctor);
+    added to CI.
+
 ### Fixed
 
 - `taxcraft` `tools/transcript-parser`: Wage and Income transcripts in the layout the IRS Online

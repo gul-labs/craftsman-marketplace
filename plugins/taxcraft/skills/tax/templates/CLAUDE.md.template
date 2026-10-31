@@ -37,7 +37,7 @@ This folder uses the `tax` Claude Code skill. On invocation, activate the skill 
 
 ## Anti-Duplication Rule
 
-A fact lives in exactly one file. If a year-scoped value diverges from the higher-level default (e.g., filing status changed mid-year), the year file records only the **delta** ("changed from MFJ to Single because …") — never copies the full profile. A changed conclusion is a new decision memo, never an in-place annotation — the skill's `supersession.md` owns that rule.
+A fact lives in exactly one file. If a year-scoped value diverges from the higher-level default (e.g., filing status changed mid-year), the year file records only the **delta** ("changed from MFJ to Single because …") — never copies the full profile. A changed conclusion is a new decision memo, never an in-place annotation — the skill's `supersession.md` owns that rule. What the owner has settled is listed in each scope's `decisions/settled-positions.md`: read it before reopening, recomputing, or briefing a reviewer on any item (`supersession.md` §8).
 
 ## PDF Reading Discipline
 

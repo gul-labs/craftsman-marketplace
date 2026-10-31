@@ -213,6 +213,18 @@ run ID. A corrected computation receives a new run ID and records
 IDs are never recycled and memo bodies are never rewritten; a corrected memo is a new memo
 that names the old one in `Supersedes`. Parallels the run-ID rule above.
 
+### Settled-positions register (`supersession.md` §8)
+
+| Item | Form |
+|---|---|
+| File | `<scope-root>/decisions/settled-positions.md` or `workspace-profile/decisions/settled-positions.md`; exactly this name, one per scope, never per year |
+| Kind | **Operative register**, not a memo: rewritten in place, no memo header; the only non-memo file in `decisions/` |
+| Settlement ID | `<PREFIX>-S<NNN>`: `<PREFIX>` is a short uppercase scope code fixed in the register's header, `<NNN>` zero-padded and sequential within the scope |
+| Template | `templates/settled-positions.md.template` |
+
+Settlement IDs are never recycled: a removed row's ID is not reused, and a correcting entry
+(`supersession.md` §8.4) takes a new ID.
+
 ### Receipts
 
 `FY<YYYY> - receipt - <yyyy-mm-dd> - <vendor-slug> - <short-desc>.pdf`. `<short-desc>` ≤4 words, kebab-case.

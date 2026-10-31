@@ -16,7 +16,9 @@ acceptance not yet verified) · `TAKEN_NOT_FILED` (decided, return not yet filed
 
 This register lists current positions only. A superseded position's row is removed; the decision
 memo that superseded it (`<scope-root>/decisions/`, see `supersession.md` §7) carries the history.
-Rows cite a memo ID where one exists and never carry the reasoning.
+Rows cite a memo ID where one exists and never carry the reasoning. Whether the owner has closed a
+position to further argument is recorded in `<scope-root>/decisions/settled-positions.md`, not here
+(`supersession.md` §8.6).
 
 Never write `IN EFFECT`, `RECORDED`, `POSITION READY`, or `FILED` for anything short of
 `TAKEN_AND_ACCEPTED`.

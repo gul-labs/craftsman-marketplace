@@ -17,6 +17,7 @@ Loaded by `init.md` and `migrate.md` only. Not needed in steady state — `CLAUD
 │   ├── slugs.md                              ← payer/vendor/broker/employer registry
 │   ├── history.md                            ← append-only cross-entity log
 │   ├── decisions/                            ← immutable cross-entity decision memos (`supersession.md`)
+│   │   └── settled-positions.md              ← OPERATIVE register: cross-entity settled items (`supersession.md` §8)
 │   └── notes/                                ← advisor memos, IRS correspondence
 │
 ├── individual/                               ← owner's 1040 workspace
@@ -24,6 +25,7 @@ Loaded by `init.md` and `migrate.md` only. Not needed in steady state — `CLAUD
 │   ├── carryforwards.json
 │   ├── history.md
 │   ├── decisions/                            ← immutable decision memos, permanent, all years (`supersession.md`)
+│   │   └── settled-positions.md              ← OPERATIVE register: what the owner has settled (`supersession.md` §8)
 │   ├── records/                              ← PERMANENT, year-independent (`individual/records.md`)
 │   │   ├── individual-records-audit-FY<YYYY>.json
 │   │   ├── _processed.log
@@ -77,6 +79,7 @@ Loaded by `init.md` and `migrate.md` only. Not needed in steady state — `CLAUD
 │   ├── entity.md
 │   ├── carryforwards.json                    ← NOLs, §163(j), §179, charitable carryovers (same flow as individual)
 │   ├── decisions/                            ← immutable decision memos, permanent, all years (`supersession.md`)
+│   │   └── settled-positions.md              ← OPERATIVE register: what the owner has settled (`supersession.md` §8)
 │   ├── corporate/
 │   │   ├── corporate-records-audit-FY<YYYY>.json ← annual structured record-set evidence/status SSOT
 │   │   ├── {formation, minutes, resolutions, annual-reports, licenses}/

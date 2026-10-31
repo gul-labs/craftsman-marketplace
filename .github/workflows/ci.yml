@@ -77,6 +77,7 @@ jobs:
             evals/validate_individual_matrix.py \
             evals/validate_individual_structure.py \
             evals/validate_rules.py \
+            evals/validate_settled_positions.py \
             evals/validate_stock_issuance.py \
             tools/parse-verify/test_verify.py \
             tools/pdf-extractor/test_pdf_extract.py \
