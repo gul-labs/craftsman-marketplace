@@ -589,6 +589,15 @@ class SettledPositionsRegisterCheck(unittest.TestCase):
         for after in (id_item, ledger_cell):
             self.assertEqual(self.rules(_register(after=after)), [], after)
 
+    def test_stranded_row_over_a_mismatched_separator_is_reported(self):
+        after = "\n" + NONLEDGER_ROW + "|---|---|---|\n"
+        self.assertIn("row-like line outside the register table", self.rules(_register(LEDGER_ROW, after=after)))
+
+    def test_settlement_row_inside_a_ten_column_ancillary_table_is_reported(self):
+        after = ("\n## Other\n\n| A | B | C | D | E | F | G | H | I | J |\n|---|---|---|---|---|---|---|---|---|---|\n"
+                 "| a | ledger | c | d | e | f | g | h | i | j |\n" + NONLEDGER_ROW)
+        self.assertEqual(self.rules(_register(LEDGER_ROW, after=after)), ["row-like line outside the register table"])
+
     def test_settlement_row_dropped_into_an_ancillary_table_is_reported(self):
         after = "\n## Not settled\n\n| Item | Status | Where |\n|---|---|---|\n" + NONLEDGER_ROW
         self.assertIn("row-like line outside the register table", self.rules(_register(LEDGER_ROW, after=after)))

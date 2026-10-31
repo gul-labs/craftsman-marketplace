@@ -726,7 +726,8 @@ def _settled_ancillary_rows(lines: list[str], fenced: list[bool], designated: in
             continue
         header = _settled_cells(lines[i])
         sep = _settled_cells(lines[i + 1])
-        if header is None or sep is None or not all(_SEPARATOR_CELL_RE.match(c) for c in sep):
+        if header is None or sep is None or len(sep) != len(header) \
+                or not all(_SEPARATOR_CELL_RE.match(c) for c in sep):
             continue
         out.update((i, i + 1))
         k = i + 2
@@ -738,19 +739,25 @@ def _settled_ancillary_rows(lines: list[str], fenced: list[bool], designated: in
     return out
 
 
-def _settled_orphan_row(line: str, width: int, id_col: int, anchor_col: int) -> bool:
+def _settled_orphan_row(line: str, width: int, id_col: int, anchor_col: int, *, strict: bool = False) -> bool:
+    """Does `line` look like a register row? Loose (outside any table): led by an
+    ID-shaped cell, or the designated width with an Anchor value or an ID-shaped
+    cell in its column. Strict (inside an ancillary table): the designated width
+    with both."""
     stripped = line.strip()
     if stripped.startswith("|"):
         stripped = stripped[1:]
     if stripped.endswith("|"):
         stripped = stripped[:-1]
     cells = [c.strip() for c in stripped.split("|")]
-    if _SETTLED_ID_LIKE_RE.match(cells[0]):
-        return True
-    if len(cells) != width:
-        return False
-    return (cells[anchor_col].strip("`").lower() in SETTLED_ANCHORS
-            or bool(_SETTLED_ID_LIKE_RE.match(cells[id_col])))
+    if len(cells) == width:
+        has_anchor = cells[anchor_col].strip("`").lower() in SETTLED_ANCHORS
+        has_id = bool(_SETTLED_ID_LIKE_RE.match(cells[id_col]))
+        if strict:
+            return has_anchor and has_id
+        if has_anchor or has_id:
+            return True
+    return not strict and bool(_SETTLED_ID_LIKE_RE.match(cells[0]))
 
 
 def settled_register_problems(text: str, root: Path) -> list[tuple[int, str]]:
@@ -820,14 +827,17 @@ def settled_register_problems(text: str, root: Path) -> list[tuple[int, str]]:
     # A row is recognised by the designated table's own schema, so reordered columns
     # are covered: the designated width, with an Anchor value in the Anchor column or
     # an ID-shaped cell in the ID column; or any line led by an ID-shaped cell.
-    # Rows of an ancillary table (its own header and separator, and its own width)
-    # are that table's business and are skipped; a row that does not fit its
-    # table's width is still examined.
+    # Rows of an ancillary table (its own header and a separator of the same width,
+    # and that width) may mention an ID or say "ledger" incidentally, so only a full
+    # settlement signature (ID-shaped cell in the ID column AND an Anchor value in
+    # the Anchor column, at the designated width) is reported there. A row that does
+    # not fit its table's width is examined like any other line.
     ancillary = _settled_ancillary_rows(lines, fenced, hi)
     for k, line in enumerate(lines):
-        if hi <= k < j or k in ancillary or fenced[k] or "|" not in line:
+        if hi <= k < j or fenced[k] or "|" not in line:
             continue
-        if _settled_orphan_row(line, len(headers), col["ID"], col["Anchor"]):
+        strict = k in ancillary
+        if _settled_orphan_row(line, len(headers), col["ID"], col["Anchor"], strict=strict):
             problems.append((k + 1, "row-like line outside the register table"))
     return problems
 
