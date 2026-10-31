@@ -641,9 +641,8 @@ _SETTLED_LOCK_ITEM_RE = re.compile(
     r"^[A-Z][A-Za-z0-9-]*(?::[A-Za-z0-9][A-Za-z0-9-]*)+\s+-?\d+(?:\.\d+)?\s+[A-Z][A-Z0-9'._-]{0,22}[A-Z0-9]$"
 )
 _SETTLED_EVIDENCE_RE = re.compile(r"^`[^`]+`(?:\s*;\s*`[^`]+`)*$")
-# A line whose first cell is a settlement ID, with or without its leading pipe or
-# backticks: a register row, wherever it sits.
-_SETTLED_ROW_LIKE_RE = re.compile(r"^\s*\|?\s*`?[A-Z][A-Z0-9]*-S\d{3,}`?\s*\|")
+# A cell shaped like a settlement ID, well formed or not (`ALP-S00X` still counts).
+_SETTLED_ID_LIKE_RE = re.compile(r"^`?[A-Z][A-Z0-9]*-S[A-Za-z0-9]+`?$")
 _SEPARATOR_CELL_RE = re.compile(r"^:?-{3,}:?$")
 
 
@@ -718,6 +717,21 @@ def _settled_evidence_problems(cell: str, root: Path) -> list[str]:
     return out
 
 
+def _settled_orphan_row(line: str, width: int, id_col: int, anchor_col: int) -> bool:
+    stripped = line.strip()
+    if stripped.startswith("|"):
+        stripped = stripped[1:]
+    if stripped.endswith("|"):
+        stripped = stripped[:-1]
+    cells = [c.strip() for c in stripped.split("|")]
+    if _SETTLED_ID_LIKE_RE.match(cells[0]):
+        return True
+    if len(cells) != width:
+        return False
+    return (cells[anchor_col].strip("`").lower() in SETTLED_ANCHORS
+            or bool(_SETTLED_ID_LIKE_RE.match(cells[id_col])))
+
+
 def settled_register_problems(text: str, root: Path) -> list[tuple[int, str]]:
     """Validate a settled-positions register. Returns [(line, rule)], line 0 for
     whole-file problems. Never returns cell content."""
@@ -780,13 +794,16 @@ def settled_register_problems(text: str, root: Path) -> list[tuple[int, str]]:
         for rule in _settled_evidence_problems(get["Evidence"], root):
             problems.append((ln, rule))
     # The table ends at the first non-row line. A settlement row anywhere else in the
-    # file (cut off by a blank line, missing its leading pipe, above the table, or
-    # under another heading) would fall out of the inventory: report it. Ancillary
-    # tables are fine; their first cell is an item, not a settlement ID.
+    # file (cut off by a blank line, missing its leading or trailing pipe, above the
+    # table, or under another heading) would fall out of the inventory: report it.
+    # A row is recognised by the designated table's own schema, so reordered columns
+    # are covered: the designated width, with an Anchor value in the Anchor column or
+    # an ID-shaped cell in the ID column; or any line led by an ID-shaped cell.
+    # Ancillary tables have other schemas and pass.
     for k, line in enumerate(lines):
-        if hi <= k < j or fenced[k]:
+        if hi <= k < j or fenced[k] or "|" not in line:
             continue
-        if _SETTLED_ROW_LIKE_RE.match(line):
+        if _settled_orphan_row(line, len(headers), col["ID"], col["Anchor"]):
             problems.append((k + 1, "row-like line outside the register table"))
     return problems
 

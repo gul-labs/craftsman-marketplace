@@ -556,10 +556,30 @@ class SettledPositionsRegisterCheck(unittest.TestCase):
         for text in (above, below):
             self.assertIn("row-like line outside the register table", self.rules(text))
 
+    def test_stranded_row_with_reordered_columns_is_reported(self):
+        header = (
+            "| Anchor | Entry date | ID | Entry | Position | Settled | Basis | Reopen only if | Evidence | Lock |\n"
+            "|---|---|---|---|---|---|---|---|---|---|\n"
+        )
+        row = (f"| non-ledger | — | `ALP-S002` | Home-office method | not claimed | 2026-02-01 owner | owner decision | "
+               f"the owner revives it | `{EV}` | — |\n")
+        text = "# S\n\n## Register\n\n" + header + row + "\n" + row
+        self.assertEqual(self.rules(text), ["row-like line outside the register table"])
+        no_pipe = row.lstrip("| ")
+        self.assertEqual(self.rules("# S\n\n## Register\n\n" + header + row + "\n" + no_pipe),
+                         ["row-like line outside the register table"])
+
+    def test_stranded_row_with_invalid_id_is_reported(self):
+        stranded = NONLEDGER_ROW.replace("ALP-S002", "ALP-S00X")
+        self.assertIn("row-like line outside the register table", self.rules(_register(LEDGER_ROW + "\n" + stranded)))
+
     def test_ancillary_tables_and_prose_mentions_are_not_stranded_rows(self):
         after = ("\n## Not settled\n\n| Item | Status | Where |\n|---|---|---|\n"
                  "| Cruise charge | recommended; see ALP-S001 | `x` |\n\nALP-S001 was settled by the owner.\n")
         self.assertEqual(self.rules(_register(after=after)), [])
+        ten_wide = ("\n## Other\n\n| A | B | C | D | E | F | G | H | I | J |\n|---|---|---|---|---|---|---|---|---|---|\n"
+                    "| a | b | c | d | e | f | g | h | i | j |\n")
+        self.assertEqual(self.rules(_register(after=ten_wide)), [])
 
     def test_findings_name_path_and_line_never_content(self):
         _write(self.root, REG, _register(LEDGER_ROW.replace("Expenses:Office 100.00 USD", "SECRETACCT 7")))

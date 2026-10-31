@@ -46,7 +46,7 @@ not a synonym for "public."
   - `tools/workspace-doctor`: the register is no longer treated as a decision memo by the lineage
     check, is scanned as operative prose, and gets a new report-only shape check (one designated
     table, headers, row width, no pipes in cells, IDs, Anchor, Basis vocabulary, ledger Lock and
-    entry date, Evidence files inside the workspace, stranded rows). 40 new fixture tests.
+    entry date, Evidence files inside the workspace, stranded rows). 39 new fixture tests.
   - `evals/settled-positions.md` (eleven synthetic behavioral cases: settled, partially settled,
     triggered, untriggered, owner-approved supersession in open and closed periods, reviewer
     briefs, matching Lock without authorization, a Lock that cannot represent the entry) and `evals/validate_settled_positions.py`
