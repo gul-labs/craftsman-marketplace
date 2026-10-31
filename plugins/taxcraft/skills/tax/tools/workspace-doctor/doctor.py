@@ -717,6 +717,27 @@ def _settled_evidence_problems(cell: str, root: Path) -> list[str]:
     return out
 
 
+def _settled_ancillary_rows(lines: list[str], fenced: list[bool], designated: int) -> set[int]:
+    """Line indexes belonging to tables other than the designated one: each
+    header, its separator, and every following row of the header's width."""
+    out: set[int] = set()
+    for i in range(len(lines) - 1):
+        if i == designated or fenced[i] or fenced[i + 1]:
+            continue
+        header = _settled_cells(lines[i])
+        sep = _settled_cells(lines[i + 1])
+        if header is None or sep is None or not all(_SEPARATOR_CELL_RE.match(c) for c in sep):
+            continue
+        out.update((i, i + 1))
+        k = i + 2
+        while k < len(lines) and not fenced[k] and lines[k].strip().startswith("|"):
+            cells = _settled_cells(lines[k])
+            if cells is not None and len(cells) == len(header):
+                out.add(k)
+            k += 1
+    return out
+
+
 def _settled_orphan_row(line: str, width: int, id_col: int, anchor_col: int) -> bool:
     stripped = line.strip()
     if stripped.startswith("|"):
@@ -799,9 +820,12 @@ def settled_register_problems(text: str, root: Path) -> list[tuple[int, str]]:
     # A row is recognised by the designated table's own schema, so reordered columns
     # are covered: the designated width, with an Anchor value in the Anchor column or
     # an ID-shaped cell in the ID column; or any line led by an ID-shaped cell.
-    # Ancillary tables have other schemas and pass.
+    # Rows of an ancillary table (its own header and separator, and its own width)
+    # are that table's business and are skipped; a row that does not fit its
+    # table's width is still examined.
+    ancillary = _settled_ancillary_rows(lines, fenced, hi)
     for k, line in enumerate(lines):
-        if hi <= k < j or fenced[k] or "|" not in line:
+        if hi <= k < j or k in ancillary or fenced[k] or "|" not in line:
             continue
         if _settled_orphan_row(line, len(headers), col["ID"], col["Anchor"]):
             problems.append((k + 1, "row-like line outside the register table"))

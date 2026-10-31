@@ -581,6 +581,18 @@ class SettledPositionsRegisterCheck(unittest.TestCase):
                     "| a | b | c | d | e | f | g | h | i | j |\n")
         self.assertEqual(self.rules(_register(after=ten_wide)), [])
 
+    def test_ancillary_rows_shaped_like_settlement_rows_are_not_stranded(self):
+        id_item = ("\n## Not settled\n\n| Item | Status | Where |\n|---|---|---|\n"
+                   "| ALP-S002 | reopened, owner decision pending | `x` |\n")
+        ledger_cell = ("\n## Other\n\n| A | B | C | D | E | F | G | H | I | J |\n|---|---|---|---|---|---|---|---|---|---|\n"
+                       "| a | ledger | c | d | e | f | g | h | i | j |\n")
+        for after in (id_item, ledger_cell):
+            self.assertEqual(self.rules(_register(after=after)), [], after)
+
+    def test_settlement_row_dropped_into_an_ancillary_table_is_reported(self):
+        after = "\n## Not settled\n\n| Item | Status | Where |\n|---|---|---|\n" + NONLEDGER_ROW
+        self.assertIn("row-like line outside the register table", self.rules(_register(LEDGER_ROW, after=after)))
+
     def test_findings_name_path_and_line_never_content(self):
         _write(self.root, REG, _register(LEDGER_ROW.replace("Expenses:Office 100.00 USD", "SECRETACCT 7")))
         hits = self.paths()
